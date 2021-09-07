@@ -1,2 +1,2 @@
 # eque
-Exclusive message queue powered by Redsync, written in Go
+Exclusive message queue powered built upon Redis, written in Go
