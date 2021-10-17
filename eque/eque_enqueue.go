@@ -3,15 +3,21 @@ package eque
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/go-redsync/redsync/v4"
+)
+
+var (
+	// ErrAcquireLockFailed is raised when locks can not be acquired
+	ErrAcquireLockFailed = errors.New("failed to acquire lock")
 )
 
 func (q *eque) Enqueue(ctx context.Context, id string, value interface{}) error {
 	mutex := q.locks.NewWMutex(id)
 	if err := mutex.LockContext(ctx); err != nil {
 		if err == redsync.ErrFailed{
-			return nil
+			return ErrAcquireLockFailed
 		}
 		return err
 	}

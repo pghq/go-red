@@ -2,6 +2,12 @@ package eque
 
 import (
 	"context"
+	"errors"
+)
+
+var (
+	// ErrNoMessages is raised when there are no messages in the queue
+	ErrNoMessages = errors.New("no messages")
 )
 
 func (q *eque) Dequeue(ctx context.Context) (Message, error) {
@@ -17,7 +23,7 @@ func (q *eque) Dequeue(ctx context.Context) (Message, error) {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
-			return nil, nil
+			return nil, ErrNoMessages
 		}
 	}
 }

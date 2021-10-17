@@ -1,10 +1,8 @@
 // Copyright 2021 PGHQ. All Rights Reserved.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the GNU General Public License, Version 3 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,7 +19,6 @@ package eque
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/adjust/rmq/v4"
@@ -31,11 +28,14 @@ import (
 )
 
 const (
-	// PrefetchLimit is the max number of prefetched deliveries
-	PrefetchLimit = 10
+	// DefaultConsumers is the total number of consumers processing messages
+	DefaultConsumers = 10
 
-	// PollDuration is the duration the queue sleeps before checking for new deliveries
-	PollDuration = 100 * time.Millisecond
+	// DefaultName is the default queue name
+	DefaultName = "eque.messages"
+
+	// DefaultInterval is the duration the queue sleeps before checking for new deliveries
+	DefaultInterval = 100 * time.Millisecond
 )
 
 // eque is an instance of the exclusive message queue.
@@ -47,17 +47,18 @@ type eque struct {
 	emitBackgroundError func(err error)
 }
 
-// NewQueue creates an instance of the exclusive queue
-func NewQueue(name string, opts... QueueOption) (Queue, error) {
+// NewRedQueue creates an instance of the exclusive queue
+func NewRedQueue(addr string, opts... QueueOption) (RedQueue, error) {
 	conf := QueueConfig{
-		redisOptions: redis.Options{
-			Addr: os.Getenv("REDIS_ADDRESS"),
-		},
+		name: DefaultName,
+		consumers: DefaultConsumers,
+		interval: DefaultInterval,
 	}
-
 	for _, opt := range opts{
 		opt.Apply(&conf)
 	}
+
+	conf.redisOptions.Addr = addr
 
 	var backgroundErrors chan error
 	if conf.emitBackgroundError != nil{
@@ -65,17 +66,17 @@ func NewQueue(name string, opts... QueueOption) (Queue, error) {
 	}
 
 	client := redis.NewClient(&conf.redisOptions)
-	conn, err := rmq.OpenConnectionWithRedisClient(fmt.Sprintf("eque.%s", name), client, backgroundErrors)
+	conn, err := rmq.OpenConnectionWithRedisClient(conf.name, client, backgroundErrors)
 	if err != nil {
 		return nil, err
 	}
 
-	mq, err := conn.OpenQueue(name)
+	mq, err := conn.OpenQueue(conf.name)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := mq.StartConsuming(PrefetchLimit, PollDuration); err != nil {
+	if err := mq.StartConsuming(int64(conf.consumers + 1), conf.interval); err != nil {
 		return nil, err
 	}
 
@@ -90,24 +91,27 @@ func NewQueue(name string, opts... QueueOption) (Queue, error) {
 		},
 	}
 
-	_, err = mq.AddConsumerFunc("eque.consumer", func(delivery rmq.Delivery) {
-		var msg message
-		if err := json.Unmarshal([]byte(delivery.Payload()), &msg); err != nil {
-			queue.EmitBackgroundError(err)
-			if err := delivery.Reject(); err != nil {
+	for i := 0; i < conf.consumers; i++ {
+		tag := fmt.Sprintf("eque.consumner.%d", i + 1)
+		_, err = mq.AddConsumerFunc(tag, func(delivery rmq.Delivery) {
+			var msg message
+			if err := json.Unmarshal([]byte(delivery.Payload()), &msg); err != nil {
 				queue.EmitBackgroundError(err)
+				if err := delivery.Reject(); err != nil {
+					queue.EmitBackgroundError(err)
+				}
+				return
 			}
-			return
+
+			msg.ack = delivery.Ack
+			msg.reject = delivery.Reject
+			msg.locks = queue.locks
+			queue.messages <- &msg
+		})
+
+		if err != nil {
+			return nil, err
 		}
-
-		msg.ack = delivery.Ack
-		msg.reject = delivery.Reject
-		msg.locks = queue.locks
-		queue.messages <- &msg
-	})
-
-	if err != nil {
-		return nil, err
 	}
 
 	if queue.emitBackgroundError != nil{
@@ -136,6 +140,9 @@ type QueueConfig struct{
 	rLockOptions []redsync.Option
 	wLockOptions []redsync.Option
 	emitBackgroundError func(err error)
+	consumers int
+	name string
+	interval time.Duration
 }
 
 // locks is a shared service for the queue and messages for obtaining locks

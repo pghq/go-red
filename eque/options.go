@@ -1,6 +1,8 @@
 package eque
 
 import (
+	"time"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redsync/redsync/v4"
 )
@@ -64,6 +66,48 @@ func (o emitBackgroundError) Apply(conf *QueueConfig){
 // WithEmitBackgroundError creates a queue option for emitting background errors.
 func WithEmitBackgroundError(emit func(err error)) QueueOption{
 	return emitBackgroundError(emit)
+}
+
+// consumers is a queue option for configuring the number of consumers.
+type consumers int
+
+func (o consumers) Apply(conf *QueueConfig){
+	if conf != nil{
+		conf.consumers = int(o)
+	}
+}
+
+// WithConsumers creates a queue option for configuring the number of consumers.
+func WithConsumers(count int) QueueOption{
+	return consumers(count)
+}
+
+// name is a queue option for configuring the queue name.
+type name string
+
+func (o name) Apply(conf *QueueConfig){
+	if conf != nil{
+		conf.name = string(o)
+	}
+}
+
+// WithName creates a queue option for configuring the queue name.
+func WithName(n string) QueueOption{
+	return name(n)
+}
+
+// interval is a queue option for configuring the queue polling interval.
+type interval time.Duration
+
+func (o interval) Apply(conf *QueueConfig){
+	if conf != nil{
+		conf.interval = time.Duration(o)
+	}
+}
+
+// WithInterval creates a queue option for the queue polling interval.
+func WithInterval(i time.Duration) QueueOption{
+	return interval(i)
 }
 
 
