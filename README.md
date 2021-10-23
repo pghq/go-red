@@ -1,6 +1,6 @@
 # go-eque
 
-Exclusive message queue built upon Redis, written in Go
+Exclusive message queue built upon Redis, written in Go.
 
 ## Installation
 
@@ -17,7 +17,7 @@ import "github.com/pghq/go-eque/eque"
 To create a new queue:
 
 ```
-queue, err := eque.NewRedQueue("name-of-your-queue")
+queue, err := eque.New("name-of-your-queue")
 if err != nil{
     panic(err)
 }
