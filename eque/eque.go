@@ -17,148 +17,191 @@
 package eque
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/adjust/rmq/v4"
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redsync/redsync/v4"
-	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
 )
 
-const (
-	// DefaultConsumers is the total number of consumers processing messages
-	DefaultConsumers = 10
+// Message is a single instance of a message within the queue.
+type Message struct {
+	Id  string `json:"id"`
+	Value []byte `json:"value"`
 
-	// DefaultName is the default queue name
-	DefaultName = "eque.messages"
-
-	// DefaultInterval is the duration the queue sleeps before checking for new deliveries
-	DefaultInterval = 100 * time.Millisecond
-)
-
-// eque is an instance of the exclusive message queue.
-type eque struct {
-	queue rmq.Queue
-	messages chan *message
-	locks locks
-	backgroundErrors chan error
-	emitBackgroundError func(err error)
+	pool *redsync.Redsync
+	readOptions []redsync.Option
+	writeOptions []redsync.Option
+	ack func() error
+	reject func() error
 }
 
-// NewRedQueue creates an instance of the exclusive queue
-func NewRedQueue(addr string, opts... QueueOption) (RedQueue, error) {
-	conf := QueueConfig{
-		name: DefaultName,
-		consumers: DefaultConsumers,
-		interval: DefaultInterval,
-	}
-	for _, opt := range opts{
-		opt.Apply(&conf)
-	}
+// Decode fills the supplied interface with the underlying message value
+func (m *Message) Decode(v interface{}) error {
+	return json.Unmarshal(m.Value, v)
+}
 
-	conf.redisOptions.Addr = addr
-
-	var backgroundErrors chan error
-	if conf.emitBackgroundError != nil{
-		backgroundErrors = make(chan error)
-	}
-
-	client := redis.NewClient(&conf.redisOptions)
-	conn, err := rmq.OpenConnectionWithRedisClient(conf.name, client, backgroundErrors)
-	if err != nil {
-		return nil, err
-	}
-
-	mq, err := conn.OpenQueue(conf.name)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := mq.StartConsuming(int64(conf.consumers + 1), conf.interval); err != nil {
-		return nil, err
-	}
-
-	pool := goredis.NewPool(client)
-	queue := eque{
-		queue: mq,
-		messages: make(chan *message),
-		locks: locks{
-			rs:    redsync.New(pool),
-			readOpts: conf.rLockOptions,
-			writeOpts: conf.wLockOptions,
-		},
-	}
-
-	for i := 0; i < conf.consumers; i++ {
-		tag := fmt.Sprintf("eque.consumner.%d", i + 1)
-		_, err = mq.AddConsumerFunc(tag, func(delivery rmq.Delivery) {
-			var msg message
-			if err := json.Unmarshal([]byte(delivery.Payload()), &msg); err != nil {
-				queue.EmitBackgroundError(err)
-				if err := delivery.Reject(); err != nil {
-					queue.EmitBackgroundError(err)
-				}
-				return
-			}
-
-			msg.ack = delivery.Ack
-			msg.reject = delivery.Reject
-			msg.locks = queue.locks
-			queue.messages <- &msg
-		})
-
-		if err != nil {
-			return nil, err
+// Ack notifies upstream of successful message handling
+func (m *Message) Ack(ctx context.Context) error {
+	if m.ack != nil{
+		if err := m.ack(); err != nil{
+			return err
 		}
 	}
 
-	if queue.emitBackgroundError != nil{
-		go func() {
-			for err := range backgroundErrors {
-				queue.emitBackgroundError(err)
-			}
-		}()
+	w := m.pool.NewMutex(fmt.Sprintf("eque.w.%s", m.Id), m.writeOptions...)
+	if _, err := w.UnlockContext(ctx); err != nil {
+		return err
 	}
 
-	return &queue, nil
-}
-
-// EmitBackgroundError emits background errors if any to the queue consumer
-func (q *eque) EmitBackgroundError(err error){
-	if q.backgroundErrors == nil{
-		return
+	r := m.pool.NewMutex(fmt.Sprintf("eque.r.%s", m.Id), m.readOptions...)
+	if _, err := r.UnlockContext(ctx); err != nil {
+		return err
 	}
 
-	q.backgroundErrors <- err
+	return nil
 }
 
-// QueueConfig is a configuration object providing options for tuning the queue.
-type QueueConfig struct{
-	redisOptions redis.Options
-	rLockOptions []redsync.Option
-	wLockOptions []redsync.Option
-	emitBackgroundError func(err error)
-	consumers int
-	name string
-	interval time.Duration
+// Reject notifies upstream of unsuccessful message handling
+func (m *Message) Reject(ctx context.Context) error {
+	if m.reject != nil{
+		if err := m.reject(); err != nil{
+			return err
+		}
+	}
+
+	w := m.pool.NewMutex(fmt.Sprintf("eque.w.%s", m.Id), m.writeOptions...)
+	if _, err := w.UnlockContext(ctx); err != nil {
+		return err
+	}
+
+	r := m.pool.NewMutex(fmt.Sprintf("eque.r.%s", m.Id), m.readOptions...)
+	if _, err := r.UnlockContext(ctx); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// locks is a shared service for the queue and messages for obtaining locks
-type locks struct{
-	rs    *redsync.Redsync
-	readOpts []redsync.Option
-	writeOpts []redsync.Option
+// Option is an interface for tuning a specific parameter of the queue.
+type Option interface {
+	Apply(conf *Config)
 }
 
-// NewRMutex creates a new mutex for queue read operations
-func (l *locks) NewRMutex(name string) *redsync.Mutex{
-	return l.rs.NewMutex(fmt.Sprintf("eque.rlocks.%s", name), l.readOpts...)
+// redisOption is a queue option for configuring the underlining redis client.
+type redisOption struct {
+	client *redis.Client
 }
 
-// NewWMutex creates a new mutex for queue write operations
-func (l *locks) NewWMutex(name string) *redsync.Mutex{
-	return l.rs.NewMutex(fmt.Sprintf("eque.wlocks.%s", name), l.writeOpts...)
+func (o redisOption) Apply(conf *Config){
+	if conf != nil{
+		conf.options.redis = o.client
+	}
 }
 
+// WithRedis creates a queue option for configuring the underlying redis client.
+func WithRedis(client *redis.Client) Option{
+	return redisOption{
+		client: client,
+	}
+}
+
+// readOptions is a queue option for configuring read locks.
+type readOptions []redsync.Option
+
+func (o readOptions) Apply(conf *Config){
+	if conf != nil{
+		conf.options.read = o
+	}
+}
+
+// Read creates a queue option for configuring read locks.
+func Read(opts ...redsync.Option) Option{
+	return readOptions(opts)
+}
+
+// writeOptions is a queue option for configuring write locks.
+type writeOptions []redsync.Option
+
+func (o writeOptions) Apply(conf *Config){
+	if conf != nil{
+		conf.options.write = o
+	}
+}
+
+// Write creates a queue option for configuring write locks.
+func Write(opts ...redsync.Option) Option{
+	return writeOptions(opts)
+}
+
+// consumers is a queue option for configuring the number of consumers.
+type consumers int
+
+func (o consumers) Apply(conf *Config){
+	if conf != nil{
+		conf.consumers = int(o)
+	}
+}
+
+// WithConsumers creates a queue option for configuring the number of consumers.
+func WithConsumers(count int) Option{
+	return consumers(count)
+}
+
+// name is a queue option for configuring the queue name.
+type name string
+
+func (o name) Apply(conf *Config){
+	if conf != nil{
+		conf.name = string(o)
+	}
+}
+
+// Name creates a queue option for configuring the queue name.
+func Name(n string) Option{
+	return name(n)
+}
+
+// interval is a queue option for configuring the queue polling interval.
+type interval time.Duration
+
+func (o interval) Apply(conf *Config){
+	if conf != nil{
+		conf.interval = time.Duration(o)
+	}
+}
+
+// At creates a queue option for the queue polling interval.
+func At(i time.Duration) Option{
+	return interval(i)
+}
+
+// maxErrors is a queue option for configuring the max number of unacked errors.
+type maxErrors int
+
+func (o maxErrors) Apply(conf *Config){
+	if conf != nil{
+		conf.errors = int(o)
+	}
+}
+
+// MaxErrors create q queue option for the maximum number of errors
+func MaxErrors(limit int) Option{
+	return maxErrors(limit)
+}
+
+// maxMessages is a queue option for configuring the max number of unacked messages
+type maxMessages int
+
+func (o maxMessages) Apply(conf *Config){
+	if conf != nil{
+		conf.messages = int(o)
+	}
+}
+
+// MaxMessages create q queue option for the maximum number of messages
+func MaxMessages(limit int) Option{
+	return maxMessages(limit)
+}
