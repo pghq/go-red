@@ -350,9 +350,7 @@ func TestRed(t *testing.T){
 			SetVal(1)
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
-		ctx, cancel := context.WithTimeout(context.Background(), 0)
-		defer cancel()
-		err := queue.Enqueue(ctx, "test", "value")
+		err := queue.Enqueue(context.TODO(), "test", "value")
 		assert.Nil(t, err)
 	})
 
@@ -429,6 +427,7 @@ func setup(t *testing.T) (*redis.Client, redismock.ClientMock, func()){
 }
 
 func expectConsumers(mock redismock.ClientMock, count int){
+	mock.MatchExpectationsInOrder(false)
 	mock.Regexp().ExpectSet(".*", ".*", time.Minute).SetVal("ok")
 	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
 	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
