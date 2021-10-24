@@ -14,7 +14,7 @@ func (q *Red) Dequeue(ctx context.Context) (*Message, error) {
 			return nil, ctx.Err()
 		default:
 			m := q.Message()
-			if m == nil{
+			if m == nil {
 				return nil, errors.NewBadRequest("no messages")
 			}
 
@@ -23,7 +23,6 @@ func (q *Red) Dequeue(ctx context.Context) (*Message, error) {
 				_ = m.Reject(ctx)
 				continue
 			}
-
 
 			return m, nil
 		}

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRed(t *testing.T){
+func TestRed(t *testing.T) {
 	t.Run("raises queue connection errors", func(t *testing.T) {
 		queue, err := New("")
 		assert.NotNil(t, err)
@@ -127,7 +127,7 @@ func TestRed(t *testing.T){
 
 	t.Run("can decode messages", func(t *testing.T) {
 		msg := Message{Id: "test", Value: []byte(`{"key": "value"}`)}
-		var value struct{
+		var value struct {
 			Value string `json:"key"`
 		}
 		err := msg.Decode(&value)
@@ -155,9 +155,9 @@ func TestRed(t *testing.T){
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
 		msg := Message{
-			Id: "test",
+			Id:   "test",
 			pool: queue.pool,
-			ack: func() error { return nil },
+			ack:  func() error { return nil },
 		}
 
 		err := msg.Ack(context.TODO())
@@ -177,9 +177,9 @@ func TestRed(t *testing.T){
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
 		msg := Message{
-			Id: "test",
+			Id:   "test",
 			pool: queue.pool,
-			ack: func() error { return nil },
+			ack:  func() error { return nil },
 		}
 
 		err := msg.Ack(context.TODO())
@@ -199,9 +199,9 @@ func TestRed(t *testing.T){
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
 		msg := Message{
-			Id: "test",
+			Id:   "test",
 			pool: queue.pool,
-			ack: func() error { return nil },
+			ack:  func() error { return nil },
 		}
 
 		err := msg.Ack(context.TODO())
@@ -228,9 +228,9 @@ func TestRed(t *testing.T){
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
 		msg := Message{
-			Id: "test",
+			Id:   "test",
 			pool: queue.pool,
-			ack: func() error { return nil },
+			ack:  func() error { return nil },
 		}
 
 		err := msg.Reject(context.TODO())
@@ -250,9 +250,9 @@ func TestRed(t *testing.T){
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
 		msg := Message{
-			Id: "test",
+			Id:   "test",
 			pool: queue.pool,
-			ack: func() error { return nil },
+			ack:  func() error { return nil },
 		}
 
 		err := msg.Reject(context.TODO())
@@ -272,9 +272,9 @@ func TestRed(t *testing.T){
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
 		msg := Message{
-			Id: "test",
+			Id:   "test",
 			pool: queue.pool,
-			ack: func() error { return nil },
+			ack:  func() error { return nil },
 		}
 
 		err := msg.Reject(context.TODO())
@@ -286,7 +286,7 @@ func TestRed(t *testing.T){
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetVal(false)
 		queue, _ := New("", WithRedis(db), WithConsumers(0), Write(redsync.WithTries(1)))
 
@@ -300,7 +300,7 @@ func TestRed(t *testing.T){
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetErr(errors.New("an error has occurred"))
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
@@ -314,11 +314,11 @@ func TestRed(t *testing.T){
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetVal(true)
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
-		err := queue.Enqueue(context.TODO(), "test", func(){})
+		err := queue.Enqueue(context.TODO(), "test", func() {})
 		assert.NotNil(t, err)
 		assert.False(t, errors.IsFatal(err))
 	})
@@ -328,7 +328,7 @@ func TestRed(t *testing.T){
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetVal(true)
 		mock.Regexp().ExpectLPush(".*eque.messages.*", `{"id":"test","value":".+"}`).
 			SetErr(errors.New("an error has occurred"))
@@ -344,7 +344,7 @@ func TestRed(t *testing.T){
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetVal(true)
 		mock.Regexp().ExpectLPush(".*eque.messages.*", `{"id":"test","value":".+"}`).
 			SetVal(1)
@@ -383,7 +383,7 @@ func TestRed(t *testing.T){
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8*time.Second).
 			SetErr(errors.New("an error has occurred"))
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
@@ -399,7 +399,7 @@ func TestRed(t *testing.T){
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8*time.Second).
 			SetVal(true)
 		queue, _ := New("", WithRedis(db), WithConsumers(0))
 
@@ -414,7 +414,7 @@ func TestRed(t *testing.T){
 
 }
 
-func setup(t *testing.T) (*redis.Client, redismock.ClientMock, func()){
+func setup(t *testing.T) (*redis.Client, redismock.ClientMock, func()) {
 	t.Helper()
 	db, mock := redismock.NewClientMock()
 	teardown := func() {
@@ -426,14 +426,14 @@ func setup(t *testing.T) (*redis.Client, redismock.ClientMock, func()){
 	return db, mock, teardown
 }
 
-func expectConsumers(mock redismock.ClientMock, count int){
+func expectConsumers(mock redismock.ClientMock, count int) {
 	mock.MatchExpectationsInOrder(false)
 	mock.Regexp().ExpectSet(".*", ".*", time.Minute).SetVal("ok")
 	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
 	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
 	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
 
-	for i := 1; i <= count; i++{
+	for i := 1; i <= count; i++ {
 		member := fmt.Sprintf(`.*eque.consumer.%d\.*`, i)
 		mock.Regexp().ExpectSAdd(".*", member).SetVal(1)
 	}
@@ -444,7 +444,7 @@ type badDelivery struct {
 	rmq.Delivery
 }
 
-func (d badDelivery) Payload() string{
+func (d badDelivery) Payload() string {
 	return ""
 }
 
@@ -453,6 +453,6 @@ type goodDelivery struct {
 	rmq.Delivery
 }
 
-func (d goodDelivery) Payload() string{
+func (d goodDelivery) Payload() string {
 	return "{}"
 }

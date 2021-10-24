@@ -31,32 +31,32 @@ const (
 
 // Red is an instance of the exclusive message queue.
 type Red struct {
-	queue rmq.Queue
-	messages chan *Message
-	errors chan error
-	errorSize int
-	messageSize int
-	pool *redsync.Redsync
-	readOptions []redsync.Option
+	queue        rmq.Queue
+	messages     chan *Message
+	errors       chan error
+	errorSize    int
+	messageSize  int
+	pool         *redsync.Redsync
+	readOptions  []redsync.Option
 	writeOptions []redsync.Option
 }
 
 // New creates an instance of the exclusive queue
-func New(addr string, opts... Option) (*Red, error) {
+func New(addr string, opts ...Option) (*Red, error) {
 	conf := Config{
-		name: DefaultName,
+		name:      DefaultName,
 		consumers: DefaultConsumers,
-		interval: DefaultInterval,
-		messages: DefaultMaxMessages,
-		errors: DefaultMaxErrors,
+		interval:  DefaultInterval,
+		messages:  DefaultMaxMessages,
+		errors:    DefaultMaxErrors,
 	}
 
-	for _, opt := range opts{
+	for _, opt := range opts {
 		opt.Apply(&conf)
 	}
 
 	client := conf.options.redis
-	if client == nil{
+	if client == nil {
 		client = redis.NewClient(&redis.Options{
 			Addr: addr,
 		})
@@ -64,10 +64,10 @@ func New(addr string, opts... Option) (*Red, error) {
 
 	pool := goredis.NewPool(client)
 	q := Red{
-		messages: make(chan *Message, conf.messages),
-		errors: make(chan error, conf.errors),
-		pool: redsync.New(pool),
-		readOptions: conf.options.read,
+		messages:     make(chan *Message, conf.messages),
+		errors:       make(chan error, conf.errors),
+		pool:         redsync.New(pool),
+		readOptions:  conf.options.read,
 		writeOptions: conf.options.write,
 	}
 
@@ -81,13 +81,13 @@ func New(addr string, opts... Option) (*Red, error) {
 		return nil, errors.Wrap(err)
 	}
 
-	if err := mq.StartConsuming(int64(conf.consumers + 1), conf.interval); err != nil {
+	if err := mq.StartConsuming(int64(conf.consumers+1), conf.interval); err != nil {
 		return nil, errors.Wrap(err)
 	}
 
 	q.queue = mq
 	for i := 0; i < conf.consumers; i++ {
-		tag := fmt.Sprintf("eque.consumer.%d", i + 1)
+		tag := fmt.Sprintf("eque.consumer.%d", i+1)
 		_, err = mq.AddConsumerFunc(tag, q.consume)
 
 		if err != nil {
@@ -99,7 +99,7 @@ func New(addr string, opts... Option) (*Red, error) {
 }
 
 // Send batches messages
-func (q *Red) Send(msg *Message) *Red{
+func (q *Red) Send(msg *Message) *Red {
 	select {
 	case q.messages <- msg:
 	default:
@@ -109,7 +109,7 @@ func (q *Red) Send(msg *Message) *Red{
 }
 
 // Message pops a message from the queue
-func (q *Red) Message() *Message{
+func (q *Red) Message() *Message {
 	select {
 	case msg := <-q.messages:
 		return msg
@@ -119,7 +119,7 @@ func (q *Red) Message() *Message{
 }
 
 // SendError batches errors
-func (q *Red) SendError(err error) *Red{
+func (q *Red) SendError(err error) *Red {
 	select {
 	case q.errors <- err:
 	default:
@@ -129,9 +129,9 @@ func (q *Red) SendError(err error) *Red{
 }
 
 // Error checks if any errors have occurred
-func (q *Red) Error() error{
+func (q *Red) Error() error {
 	select {
-	case err := <- q.errors:
+	case err := <-q.errors:
 		return err
 	default:
 		return nil
@@ -139,7 +139,7 @@ func (q *Red) Error() error{
 }
 
 // consume is handles rmq deliveries
-func (q *Red) consume(delivery rmq.Delivery){
+func (q *Red) consume(delivery rmq.Delivery) {
 	var msg Message
 	if err := json.Unmarshal([]byte(delivery.Payload()), &msg); err != nil {
 		q.SendError(errors.Wrap(err))
@@ -155,16 +155,15 @@ func (q *Red) consume(delivery rmq.Delivery){
 }
 
 // Config is a configuration object providing options for tuning the queue.
-type Config struct{
-	options struct{
+type Config struct {
+	options struct {
 		redis *redis.Client
-		read []redsync.Option
+		read  []redsync.Option
 		write []redsync.Option
 	}
 	consumers int
-	name string
-	interval time.Duration
-	errors int
-	messages int
+	name      string
+	interval  time.Duration
+	errors    int
+	messages  int
 }
-
