@@ -126,7 +126,7 @@ func TestScheduler_Start(t *testing.T) {
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetVal(false)
 
 		queue, _ := eque.New("", eque.WithRedis(db), eque.WithConsumers(0))
@@ -168,7 +168,7 @@ func TestScheduler_Start(t *testing.T) {
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetVal(true)
 		mock.Regexp().ExpectLPush(".*eque.messages.*", `{"id":"test","value":".+"}`).
 			SetVal(1)
@@ -193,13 +193,13 @@ func TestScheduler_Worker(t *testing.T) {
 		defer teardown()
 
 		expectConsumers(mock, 1)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetVal(true)
 		mock.Regexp().ExpectLPush(".*eque.messages.*", `{"id":"test","value":".+"}`).
 			SetVal(1)
 		mock.Regexp().ExpectLLen(".*eque.messages.*").
 			SetVal(1)
-		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8*time.Second).
 			SetVal(true)
 		mock.Regexp().ExpectRPopLPush(".*eque.messages.*", ".*eque.messages.*").
 			SetVal(`{"id":"test","value":"YmFk"}`)
@@ -235,13 +235,13 @@ func TestScheduler_Worker(t *testing.T) {
 		defer teardown()
 
 		expectConsumers(mock, 1)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
 			SetVal(true)
 		mock.Regexp().ExpectLPush(".*eque.messages.*", `{"id":"test","value":".+"}`).
 			SetVal(1)
 		mock.Regexp().ExpectLLen(".*eque.messages.*").
 			SetVal(1)
-		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8 * time.Second).
+		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8*time.Second).
 			SetVal(true)
 		mock.Regexp().ExpectRPopLPush(".*eque.messages.*", ".*eque.messages.*").
 			SetVal(`{"id":"test","value":"eyJpZCI6ICJ0ZXN0In0="}`)
@@ -337,7 +337,7 @@ func TestTask_SetRecurrence(t *testing.T) {
 	})
 }
 
-func setup(t *testing.T) (*redis.Client, redismock.ClientMock, func()){
+func setup(t *testing.T) (*redis.Client, redismock.ClientMock, func()) {
 	t.Helper()
 	db, mock := redismock.NewClientMock()
 	teardown := func() {
@@ -349,14 +349,14 @@ func setup(t *testing.T) (*redis.Client, redismock.ClientMock, func()){
 	return db, mock, teardown
 }
 
-func expectConsumers(mock redismock.ClientMock, count int){
+func expectConsumers(mock redismock.ClientMock, count int) {
 	mock.MatchExpectationsInOrder(false)
 	mock.Regexp().ExpectSet(".*", ".*", time.Minute).SetVal("ok")
 	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
 	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
 	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
 
-	for i := 1; i <= count; i++{
+	for i := 1; i <= count; i++ {
 		member := fmt.Sprintf(`.*eque.consumer.%d\.*`, i)
 		mock.Regexp().ExpectSAdd(".*", member).SetVal(1)
 	}
