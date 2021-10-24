@@ -318,11 +318,8 @@ github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417/go.m
 github.com/opencontainers/selinux v1.8.2/go.mod h1:MUIHuUEvKB1wtJjQdOyYRgOnLD2xAPP8dBsCoU0KuF8=
 github.com/ory/dockertest/v3 v3.8.0/go.mod h1:9zPATATlWQru+ynXP+DytBQrsXV7Tmlx7K86H6fQaDo=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
-github.com/pghq/go-eque v0.0.2/go.mod h1:ShMDY8GQUVKs2l55s3ufPbLng09HDkJZh9xSDSenf7g=
-github.com/pghq/go-museum v0.0.12 h1:uynCMMozZlZOdry6Spl4tfEqEWPzLr7bA7s0kWI81YQ=
-github.com/pghq/go-museum v0.0.12/go.mod h1:HOTwy+sbyF+wEaI2PdZGdrfey+sUOHOXM32aXX7Fbuo=
-github.com/pghq/go-museum v0.0.14 h1:v6Ewh6WnRpjUL9COo+Iv12IABkQS9CT4jaEmO/bQz/c=
-github.com/pghq/go-museum v0.0.14/go.mod h1:HOTwy+sbyF+wEaI2PdZGdrfey+sUOHOXM32aXX7Fbuo=
+github.com/pghq/go-museum v0.0.15 h1:JB2HTdD0TI8N24hHpIvnn60szj0gfil4IORae80fJ6M=
+github.com/pghq/go-museum v0.0.15/go.mod h1:pK1cvjy73EsZxCpXShra9epZuGOPsJU3E2QtlYveBaw=
 github.com/pierrec/lz4 v2.0.5+incompatible/go.mod h1:pdkljMzZIN41W+lC3N2tnIh5sFi+IEE17M5jbnwPHcY=
 github.com/pingcap/errors v0.11.4 h1:lFuQV/oaUMGcD2tqt+01ROSmJs75VG1ToEOkZIZ4nE4=
 github.com/pingcap/errors v0.11.4/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
@@ -391,6 +388,7 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stvp/tempredis v0.0.0-20181119212430-b82af8480203 h1:QVqDTf3h2WHt08YuiTGPZLls0Wq99X9bWd0Q5ZSBesM=
 github.com/stvp/tempredis v0.0.0-20181119212430-b82af8480203/go.mod h1:oqN97ltKNihBbwlX8dLpwxCl3+HnXKV/R0e+sRLd9C8=
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
+github.com/teambition/rrule-go v1.7.2 h1:goEajFWYydfCgavn2m/3w5U+1b3PGqPUHx/fFSVfTy0=
 github.com/teambition/rrule-go v1.7.2/go.mod h1:mBJ1Ht5uboJ6jexKdNUJg2NcwP8uUMNvStWXlJD3MvU=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tv42/httpunix v0.0.0-20191220191345-2ba4b9c3382c/go.mod h1:hzIxponao9Kjc7aWznkXaL4U4TWaDSs8zcsY4Ka08nM=
