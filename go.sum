@@ -170,8 +170,8 @@ github.com/onsi/gomega v1.10.5/go.mod h1:gza4q3jKQJijlu05nKWRCW/GavJumGt8aNRxWg7
 github.com/onsi/gomega v1.15.0 h1:WjP/FQ/sk43MRmnEcT+MlDw2TFvkrXlprrPST/IudjU=
 github.com/onsi/gomega v1.15.0/go.mod h1:cIuvLEne0aoVhAgh/O6ac0Op8WWw9H6eYCriF+tEHG0=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
-github.com/pghq/go-museum v0.0.17 h1:xIw8pujpAeLtMBXlBdFXoQvxq+27yFAfNl3MuKkZXm4=
-github.com/pghq/go-museum v0.0.17/go.mod h1:+1gUca5388mTu0XF5OcD3RIONs8TawPsjPa2N39vKhw=
+github.com/pghq/go-museum v0.0.19 h1:ONun8J0HlzKcRF/Q+izyAmz5eh6CfYEKWXGSVosN8tQ=
+github.com/pghq/go-museum v0.0.19/go.mod h1:+1gUca5388mTu0XF5OcD3RIONs8TawPsjPa2N39vKhw=
 github.com/pingcap/errors v0.11.4 h1:lFuQV/oaUMGcD2tqt+01ROSmJs75VG1ToEOkZIZ4nE4=
 github.com/pingcap/errors v0.11.4/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
