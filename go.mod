@@ -7,7 +7,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.3
 	github.com/go-redis/redismock/v8 v8.0.6
 	github.com/go-redsync/redsync/v4 v4.4.1
-	github.com/pghq/go-museum v0.0.17
+	github.com/pghq/go-museum v0.0.19
 	github.com/stretchr/testify v1.7.0
 	github.com/teambition/rrule-go v1.7.2
 )

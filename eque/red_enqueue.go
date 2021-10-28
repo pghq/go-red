@@ -12,7 +12,7 @@ import (
 func (q *Red) Enqueue(ctx context.Context, id string, value interface{}) error {
 	mutex := q.pool.NewMutex(fmt.Sprintf("eque.w.%s", id), q.writeOptions...)
 	if err := mutex.LockContext(ctx); err != nil {
-		if err == redsync.ErrFailed {
+		if errors.Is(err, redsync.ErrFailed) {
 			return errors.BadRequest(err)
 		}
 
