@@ -1,41 +1,29 @@
-package scheduler
+package red
 
 import (
-	"fmt"
-	"io"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/pghq/go-eque/eque"
-
-	"github.com/go-redis/redis/v8"
-	"github.com/go-redis/redismock/v8"
-	"github.com/pghq/go-museum/museum/diagnostic/log"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMain(m *testing.M) {
-	log.Writer(io.Discard)
-	defer log.Reset()
-	code := m.Run()
-	os.Exit(code)
-}
-
-func TestNew(t *testing.T) {
+func TestNewScheduler(t *testing.T) {
 	t.Run("can create instance", func(t *testing.T) {
 		db, _, teardown := setup(t)
 		defer teardown()
 
-		queue, _ := eque.New("", eque.WithRedis(db))
+		queue, _ := NewQueue("", WithRedis(db))
 
-		s := New(queue)
+		s := NewScheduler(queue)
 		assert.NotNil(t, s)
 		assert.Equal(t, s.queue, queue)
-		assert.Equal(t, DefaultInterval, s.interval)
+		assert.Equal(t, DefaultSchedulerInterval, s.interval)
 		assert.Equal(t, DefaultEnqueueTimeout, s.enqueueTimeout)
 		assert.Equal(t, DefaultDequeueTimeout, s.dequeueTimeout)
 		assert.Empty(t, s.tasks)
+
+		s.Stop()
+		s.Stop()
 	})
 }
 
@@ -44,9 +32,9 @@ func TestScheduler_Every(t *testing.T) {
 		db, _, teardown := setup(t)
 		defer teardown()
 
-		queue, _ := eque.New("", eque.WithRedis(db))
+		queue, _ := NewQueue("", WithRedis(db))
 
-		s := New(queue).Every(time.Second)
+		s := NewScheduler(queue).Every(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.interval)
 	})
@@ -57,9 +45,9 @@ func TestScheduler_EnqueueTimeout(t *testing.T) {
 		db, _, teardown := setup(t)
 		defer teardown()
 
-		queue, _ := eque.New("", eque.WithRedis(db))
+		queue, _ := NewQueue("", WithRedis(db))
 
-		s := New(queue).EnqueueTimeout(time.Second)
+		s := NewScheduler(queue).EnqueueTimeout(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.enqueueTimeout)
 	})
@@ -70,9 +58,9 @@ func TestScheduler_DequeueTimeout(t *testing.T) {
 		db, _, teardown := setup(t)
 		defer teardown()
 
-		queue, _ := eque.New("", eque.WithRedis(db))
+		queue, _ := NewQueue("", WithRedis(db))
 
-		s := New(queue).DequeueTimeout(time.Second)
+		s := NewScheduler(queue).DequeueTimeout(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.dequeueTimeout)
 	})
@@ -83,10 +71,10 @@ func TestScheduler_Add(t *testing.T) {
 		db, _, teardown := setup(t)
 		defer teardown()
 
-		queue, _ := eque.New("", eque.WithRedis(db))
+		queue, _ := NewQueue("", WithRedis(db))
 
 		task := NewTask("")
-		s := New(queue).Add(task)
+		s := NewScheduler(queue).Add(task)
 		assert.NotNil(t, s)
 		assert.Empty(t, s.tasks)
 	})
@@ -95,10 +83,10 @@ func TestScheduler_Add(t *testing.T) {
 		db, _, teardown := setup(t)
 		defer teardown()
 
-		queue, _ := eque.New("", eque.WithRedis(db))
+		queue, _ := NewQueue("", WithRedis(db))
 
 		task := NewTask("test")
-		s := New(queue).Add(task)
+		s := NewScheduler(queue).Add(task)
 		assert.NotNil(t, s)
 		assert.NotEmpty(t, s.tasks)
 		assert.Len(t, s.tasks, 1)
@@ -109,10 +97,10 @@ func TestScheduler_Add(t *testing.T) {
 		db, _, teardown := setup(t)
 		defer teardown()
 
-		queue, _ := eque.New("", eque.WithRedis(db))
+		queue, _ := NewQueue("", WithRedis(db))
 
 		task := NewTask("test")
-		s := New(queue).Add(task).Add(task)
+		s := NewScheduler(queue).Add(task).Add(task)
 		assert.NotNil(t, s)
 		assert.NotEmpty(t, s.tasks)
 		assert.Len(t, s.tasks, 1)
@@ -126,14 +114,14 @@ func TestScheduler_Start(t *testing.T) {
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
+		mock.Regexp().ExpectSetNX("red.w.test", ".+", 8*time.Second).
 			SetVal(false)
 
-		queue, _ := eque.New("", eque.WithRedis(db), eque.WithConsumers(0))
+		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
 
 		task := NewTask("test")
 		done := make(chan struct{}, 1)
-		s := New(queue).Add(task).Notify(func(t *Task) {
+		s := NewScheduler(queue).Add(task).Notify(func(t *Task) {
 			done <- struct{}{}
 		})
 		go s.Start()
@@ -146,13 +134,13 @@ func TestScheduler_Start(t *testing.T) {
 		db, _, teardown := setup(t)
 		defer teardown()
 
-		queue, _ := eque.New("", eque.WithRedis(db), eque.WithConsumers(0))
+		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
 
 		task := NewTask("test")
 		_ = task.SetRecurrence("DTSTART=99990101T000000Z;FREQ=DAILY")
 
 		done := make(chan struct{}, 1)
-		s := New(queue).Add(task).Notify(func(t *Task) {
+		s := NewScheduler(queue).Add(task).Notify(func(t *Task) {
 			done <- struct{}{}
 		})
 
@@ -168,15 +156,15 @@ func TestScheduler_Start(t *testing.T) {
 		defer teardown()
 
 		expectConsumers(mock, 0)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
+		mock.Regexp().ExpectSetNX("red.w.test", ".+", 8*time.Second).
 			SetVal(true)
-		mock.Regexp().ExpectLPush(".*eque.messages.*", `{"id":"test","value":".+"}`).
+		mock.Regexp().ExpectLPush(".*red.messages.*", `{"id":"test","value":".+"}`).
 			SetVal(1)
 
-		queue, _ := eque.New("", eque.WithRedis(db), eque.WithConsumers(0))
+		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
 		task := NewTask("test")
 		done := make(chan struct{}, 1)
-		s := New(queue).Add(task).Notify(func(t *Task) {
+		s := NewScheduler(queue).Add(task).Notify(func(t *Task) {
 			done <- struct{}{}
 		})
 		go s.Start()
@@ -193,29 +181,29 @@ func TestScheduler_Worker(t *testing.T) {
 		defer teardown()
 
 		expectConsumers(mock, 1)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
+		mock.Regexp().ExpectSetNX("red.w.test", ".+", 8*time.Second).
 			SetVal(true)
-		mock.Regexp().ExpectLPush(".*eque.messages.*", `{"id":"test","value":".+"}`).
+		mock.Regexp().ExpectLPush(".*red.messages.*", `{"id":"test","value":".+"}`).
 			SetVal(1)
-		mock.Regexp().ExpectLLen(".*eque.messages.*").
+		mock.Regexp().ExpectLLen(".*red.messages.*").
 			SetVal(1)
-		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8*time.Second).
+		mock.Regexp().ExpectSetNX("red.r.test", ".+", 8*time.Second).
 			SetVal(true)
-		mock.Regexp().ExpectRPopLPush(".*eque.messages.*", ".*eque.messages.*").
+		mock.Regexp().ExpectRPopLPush(".*red.messages.*", ".*red.messages.*").
 			SetVal(`{"id":"test","value":"YmFk"}`)
-		mock.Regexp().ExpectLRem(".*eque.messages.*", 1, `{"id":"test","value":"YmFk"}`).
+		mock.Regexp().ExpectLRem(".*red.messages.*", 1, `{"id":"test","value":"YmFk"}`).
 			SetVal(0)
 
-		queue, _ := eque.New("", eque.WithRedis(db), eque.WithConsumers(1))
+		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1))
 
 		task := NewTask("test")
 		scheduled := make(chan struct{}, 1)
 		done := make(chan struct{}, 1)
-		s := New(queue).Add(task).Add(task).
+		s := NewScheduler(queue).Add(task).Add(task).
 			Notify(func(t *Task) {
 				scheduled <- struct{}{}
 			}).
-			NotifyWorker(func(msg *eque.Message) {
+			NotifyWorker(func(msg *Message) {
 				if msg != nil {
 					done <- struct{}{}
 				}
@@ -235,29 +223,29 @@ func TestScheduler_Worker(t *testing.T) {
 		defer teardown()
 
 		expectConsumers(mock, 1)
-		mock.Regexp().ExpectSetNX("eque.w.test", ".+", 8*time.Second).
+		mock.Regexp().ExpectSetNX("red.w.test", ".+", 8*time.Second).
 			SetVal(true)
-		mock.Regexp().ExpectLPush(".*eque.messages.*", `{"id":"test","value":".+"}`).
+		mock.Regexp().ExpectLPush(".*red.messages.*", `{"id":"test","value":".+"}`).
 			SetVal(1)
-		mock.Regexp().ExpectLLen(".*eque.messages.*").
+		mock.Regexp().ExpectLLen(".*red.messages.*").
 			SetVal(1)
-		mock.Regexp().ExpectSetNX("eque.r.test", ".+", 8*time.Second).
+		mock.Regexp().ExpectSetNX("red.r.test", ".+", 8*time.Second).
 			SetVal(true)
-		mock.Regexp().ExpectRPopLPush(".*eque.messages.*", ".*eque.messages.*").
+		mock.Regexp().ExpectRPopLPush(".*red.messages.*", ".*red.messages.*").
 			SetVal(`{"id":"test","value":"eyJpZCI6ICJ0ZXN0In0="}`)
-		mock.Regexp().ExpectLRem(".*eque.messages.*", 1, `{"id":"test","value":"eyJpZCI6ICJ0ZXN0In0="}`).
+		mock.Regexp().ExpectLRem(".*red.messages.*", 1, `{"id":"test","value":"eyJpZCI6ICJ0ZXN0In0="}`).
 			SetVal(1)
 
-		queue, _ := eque.New("", eque.WithRedis(db), eque.WithConsumers(1))
+		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1))
 
 		task := NewTask("test")
 		scheduled := make(chan struct{}, 1)
 		done := make(chan struct{}, 1)
-		s := New(queue).Add(task).Add(task).
+		s := NewScheduler(queue).Add(task).Add(task).
 			Notify(func(t *Task) {
 				scheduled <- struct{}{}
 			}).
-			NotifyWorker(func(msg *eque.Message) {
+			NotifyWorker(func(msg *Message) {
 				if msg != nil {
 					done <- struct{}{}
 				}
@@ -301,6 +289,8 @@ func TestTask_CanSchedule(t *testing.T) {
 		_ = task.SetRecurrence("FREQ=DAILY;COUNT=1")
 		canSchedule := task.CanSchedule(time.Now())
 		assert.True(t, canSchedule)
+		task.Unlock()
+		task.Unlock()
 	})
 }
 
@@ -335,29 +325,4 @@ func TestTask_SetRecurrence(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.Empty(t, task.Schedule.Recurrence)
 	})
-}
-
-func setup(t *testing.T) (*redis.Client, redismock.ClientMock, func()) {
-	t.Helper()
-	db, mock := redismock.NewClientMock()
-	teardown := func() {
-		if err := mock.ExpectationsWereMet(); err != nil {
-			t.Error(err)
-		}
-	}
-
-	return db, mock, teardown
-}
-
-func expectConsumers(mock redismock.ClientMock, count int) {
-	mock.MatchExpectationsInOrder(false)
-	mock.Regexp().ExpectSet(".*", ".*", time.Minute).SetVal("ok")
-	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
-	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
-	mock.Regexp().ExpectSAdd(".*", ".*eque.messages.*").SetVal(1)
-
-	for i := 1; i <= count; i++ {
-		member := fmt.Sprintf(`.*eque.consumer.%d\.*`, i)
-		mock.Regexp().ExpectSAdd(".*", member).SetVal(1)
-	}
 }

@@ -1,33 +1,19 @@
-// Copyright 2021 PGHQ. All Rights Reserved.
-//
-// Licensed under the GNU General Public License, Version 3 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// Package worker provides a background worker for offline processing.
-package worker
+package red
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/pghq/go-museum/museum/diagnostic/errors"
-	"github.com/pghq/go-museum/museum/diagnostic/log"
+	"github.com/pghq/go-tea"
 )
 
 const (
 	// DefaultInstances is the default number of simultaneous workers
 	DefaultInstances = 1
 
-	// DefaultInterval is the default period between running batches of jobs
-	DefaultInterval = time.Millisecond
+	// DefaultWorkerInterval is the default period between running batches of jobs
+	DefaultWorkerInterval = time.Millisecond
 )
 
 // Worker is an instance of a background worker.
@@ -47,7 +33,7 @@ func (w *Worker) Start() {
 		go w.start(ctx, i+1)
 	}
 
-	log.Infof("worker: workers=%d, started", w.instances)
+	tea.Infof("worker: workers=%d, started", w.instances)
 
 	<-w.stop
 	cancel()
@@ -56,7 +42,7 @@ func (w *Worker) Start() {
 		w.Stop()
 	}()
 	<-w.stop
-	log.Info("worker: stopped")
+	tea.Info("worker: stopped")
 }
 
 // Concurrent sets the number of simultaneous instances to process tasks.
@@ -83,7 +69,6 @@ func (w *Worker) Stop() {
 
 func (w *Worker) start(ctx context.Context, instance int) {
 	defer w.wg.Done()
-	stopped := make(chan struct{})
 	go func() {
 		wg := sync.WaitGroup{}
 		for {
@@ -99,40 +84,32 @@ func (w *Worker) start(ctx context.Context, instance int) {
 					defer wg.Done()
 					defer func() {
 						if err := recover(); err != nil {
-							errors.Recover(err)
+							tea.Recover(err)
 						}
 					}()
 
-					log.Debugf("worker: instance=%d, job=%d, started", instance, i)
+					tea.Debugf("worker: instance=%d, job=%d, started", instance, i)
 					ctx, cancel := context.WithTimeout(ctx, w.interval)
 					defer cancel()
 					job(ctx)
-					log.Debugf("worker: instance=%d, job=%d, finished", instance, i)
+					tea.Debugf("worker: instance=%d, job=%d, finished", instance, i)
 				}(i, job)
 			}
 
-			go func() {
-				wg.Wait()
-				stopped <- struct{}{}
-			}()
-
-			select {
-			case <-stopped:
-			case <-ctx.Done():
-			}
+			wg.Wait()
 		}
 	}()
 
-	log.Infof("worker: instance=%d, started", instance)
+	tea.Infof("worker: instance=%d, started", instance)
 	<-ctx.Done()
-	log.Infof("worker: instance=%d, stopped", instance)
+	tea.Infof("worker: instance=%d, stopped", instance)
 }
 
-// New creates a new worker instance.
-func New(jobs ...Job) *Worker {
+// NewWorker creates a new worker instance.
+func NewWorker(jobs ...Job) *Worker {
 	w := Worker{
 		instances: DefaultInstances,
-		interval:  DefaultInterval,
+		interval:  DefaultWorkerInterval,
 		jobs:      jobs,
 		stop:      make(chan struct{}, 1),
 	}
