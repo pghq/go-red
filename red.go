@@ -1,20 +1,4 @@
-// Copyright 2021 PGHQ. All Rights Reserved.
-//
-// Licensed under the GNU General Public License, Version 3 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// Package eque provides resources for interacting with this application.
-//
-// Any functionality provided by this package should not
-// depend on any external packages within the application.
-package eque
+package red
 
 import (
 	"context"
@@ -22,9 +6,154 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/adjust/rmq/v4"
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redsync/redsync/v4"
+	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
+	"github.com/pghq/go-tea"
 )
+
+const (
+	// DefaultConsumers is the total number of consumers processing messages
+	DefaultConsumers = 10
+
+	// DefaultName is the default queue name
+	DefaultName = "red.messages"
+
+	// DefaultQueueInterval is the duration the queue sleeps before checking for new deliveries
+	DefaultQueueInterval = 100 * time.Millisecond
+
+	// DefaultMaxMessages is the default max number of messages to keep before dropping occurs
+	DefaultMaxMessages = 1024
+
+	// DefaultMaxErrors is the default max number of errors to track before dropping occurs
+	DefaultMaxErrors = 1024
+)
+
+// Red is an instance of the exclusive message queue.
+type Red struct {
+	queue        rmq.Queue
+	messages     chan *Message
+	errors       chan error
+	errorSize    int
+	messageSize  int
+	pool         *redsync.Redsync
+	readOptions  []redsync.Option
+	writeOptions []redsync.Option
+}
+
+// Send batches messages
+func (r *Red) Send(msg *Message) *Red {
+	select {
+	case r.messages <- msg:
+	default:
+	}
+
+	return r
+}
+
+// Message pops a message from the queue
+func (r *Red) Message() *Message {
+	select {
+	case msg := <-r.messages:
+		return msg
+	default:
+		return nil
+	}
+}
+
+// SendError batches errors
+func (r *Red) SendError(err error) *Red {
+	select {
+	case r.errors <- err:
+	default:
+	}
+
+	return r
+}
+
+// Error checks if any errors have occurred
+func (r *Red) Error() error {
+	select {
+	case err := <-r.errors:
+		return err
+	default:
+		return nil
+	}
+}
+
+// consume is handles rmq deliveries
+func (r *Red) consume(delivery rmq.Delivery) {
+	var msg Message
+	if err := json.Unmarshal([]byte(delivery.Payload()), &msg); err != nil {
+		r.SendError(tea.Error(err))
+		return
+	}
+
+	msg.ack = delivery.Ack
+	msg.reject = delivery.Reject
+	msg.pool = r.pool
+	msg.readOptions = r.readOptions
+	msg.writeOptions = r.writeOptions
+	r.Send(&msg)
+}
+
+// NewQueue creates an instance of the exclusive queue
+func NewQueue(addr string, opts ...Option) (*Red, error) {
+	conf := Config{
+		name:      DefaultName,
+		consumers: DefaultConsumers,
+		interval:  DefaultQueueInterval,
+		messages:  DefaultMaxMessages,
+		errors:    DefaultMaxErrors,
+	}
+
+	for _, opt := range opts {
+		opt.Apply(&conf)
+	}
+
+	client := conf.options.redis
+	if client == nil {
+		client = redis.NewClient(&redis.Options{
+			Addr: addr,
+		})
+	}
+
+	pool := goredis.NewPool(client)
+	q := Red{
+		messages:     make(chan *Message, conf.messages),
+		errors:       make(chan error, conf.errors),
+		pool:         redsync.New(pool),
+		readOptions:  conf.options.read,
+		writeOptions: conf.options.write,
+	}
+
+	conn, err := rmq.OpenConnectionWithRedisClient(conf.name, client, q.errors)
+	if err != nil {
+		return nil, tea.Error(err)
+	}
+
+	mq, err := conn.OpenQueue(conf.name)
+	if err != nil {
+		return nil, tea.Error(err)
+	}
+
+	if err := mq.StartConsuming(int64(conf.consumers+1), conf.interval); err != nil {
+		return nil, tea.Error(err)
+	}
+
+	q.queue = mq
+	for i := 0; i < conf.consumers; i++ {
+		tag := fmt.Sprintf("red.consumer.%d", i+1)
+		_, err = mq.AddConsumerFunc(tag, q.consume)
+
+		if err != nil {
+			return nil, tea.Error(err)
+		}
+	}
+
+	return &q, nil
+}
 
 // Message is a single instance of a message within the queue.
 type Message struct {
@@ -51,12 +180,12 @@ func (m *Message) Ack(ctx context.Context) error {
 		}
 	}
 
-	w := m.pool.NewMutex(fmt.Sprintf("eque.w.%s", m.Id), m.writeOptions...)
+	w := m.pool.NewMutex(fmt.Sprintf("red.w.%s", m.Id), m.writeOptions...)
 	if _, err := w.UnlockContext(ctx); err != nil {
 		return err
 	}
 
-	r := m.pool.NewMutex(fmt.Sprintf("eque.r.%s", m.Id), m.readOptions...)
+	r := m.pool.NewMutex(fmt.Sprintf("red.r.%s", m.Id), m.readOptions...)
 	if _, err := r.UnlockContext(ctx); err != nil {
 		return err
 	}
@@ -72,12 +201,12 @@ func (m *Message) Reject(ctx context.Context) error {
 		}
 	}
 
-	w := m.pool.NewMutex(fmt.Sprintf("eque.w.%s", m.Id), m.writeOptions...)
+	w := m.pool.NewMutex(fmt.Sprintf("red.w.%s", m.Id), m.writeOptions...)
 	if _, err := w.UnlockContext(ctx); err != nil {
 		return err
 	}
 
-	r := m.pool.NewMutex(fmt.Sprintf("eque.r.%s", m.Id), m.readOptions...)
+	r := m.pool.NewMutex(fmt.Sprintf("red.r.%s", m.Id), m.readOptions...)
 	if _, err := r.UnlockContext(ctx); err != nil {
 		return err
 	}
@@ -204,4 +333,18 @@ func (o maxMessages) Apply(conf *Config) {
 // MaxMessages create q queue option for the maximum number of messages
 func MaxMessages(limit int) Option {
 	return maxMessages(limit)
+}
+
+// Config is a configuration object providing options for tuning the queue.
+type Config struct {
+	options struct {
+		redis *redis.Client
+		read  []redsync.Option
+		write []redsync.Option
+	}
+	consumers int
+	name      string
+	interval  time.Duration
+	errors    int
+	messages  int
 }

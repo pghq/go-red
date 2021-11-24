@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/go-eque.iml" filepath="$PROJECT_DIR$/.idea/go-eque.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/go-red.iml" filepath="$PROJECT_DIR$/.idea/go-red.iml" />
     </modules>
   </component>
 </project>

@@ -1,34 +1,17 @@
-// Copyright 2021 PGHQ. All Rights Reserved.
-//
-// Licensed under the GNU General Public License, Version 3 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// Package scheduler provides a scheduler for recurring tasks.
-package scheduler
+package red
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/pghq/go-eque/eque"
-	"github.com/pghq/go-eque/eque/worker"
-
-	"github.com/pghq/go-museum/museum/diagnostic/errors"
-	"github.com/pghq/go-museum/museum/diagnostic/log"
+	"github.com/pghq/go-tea"
 	"github.com/teambition/rrule-go"
 )
 
 const (
-	// DefaultInterval is the default period between checking tasks to schedule
-	DefaultInterval = time.Millisecond
+	// DefaultSchedulerInterval is the default period between checking tasks to schedule
+	DefaultSchedulerInterval = time.Millisecond
 
 	// DefaultEnqueueTimeout is the default time allowed for queue write ops
 	DefaultEnqueueTimeout = 10 * time.Millisecond
@@ -41,7 +24,7 @@ const (
 type Scheduler struct {
 	interval       time.Duration
 	stop           chan struct{}
-	queue          *eque.Red
+	queue          *Red
 	enqueueTimeout time.Duration
 	dequeueTimeout time.Duration
 	lock           sync.RWMutex
@@ -49,7 +32,7 @@ type Scheduler struct {
 	completed      chan *Task
 	wg             sync.WaitGroup
 	notify         func(t *Task)
-	notifyWorker   func(msg *eque.Message)
+	notifyWorker   func(msg *Message)
 }
 
 // Every sets the interval for checking for new jobs to scheduler.
@@ -81,7 +64,7 @@ func (s *Scheduler) Notify(notify func(t *Task)) *Scheduler {
 }
 
 // NotifyWorker is executed after a message has been popped or otherwise errored while attempting to
-func (s *Scheduler) NotifyWorker(notify func(msg *eque.Message)) *Scheduler {
+func (s *Scheduler) NotifyWorker(notify func(msg *Message)) *Scheduler {
 	s.notifyWorker = notify
 
 	return s
@@ -93,7 +76,7 @@ func (s *Scheduler) Start() {
 
 	s.wg.Add(1)
 	go s.start(ctx)
-	log.Info("scheduler: started")
+	tea.Info("scheduler: started")
 
 	<-s.stop
 	cancel()
@@ -102,7 +85,7 @@ func (s *Scheduler) Start() {
 		s.Stop()
 	}()
 	<-s.stop
-	log.Info("scheduler: stopped")
+	tea.Info("scheduler: stopped")
 }
 
 // Stop stops the scheduler and waits for background jobs to finish.
@@ -124,23 +107,23 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 		_, present := s.tasks[task.Id]
 		s.lock.RUnlock()
 		if present {
-			log.Infof("scheduler: task=%s already in ledger", task.Id)
+			tea.Infof("scheduler: task=%s already in ledger", task.Id)
 			continue
 		}
 
 		s.lock.Lock()
 		s.tasks[task.Id] = task
 		s.lock.Unlock()
-		log.Infof("scheduler: task=%s added to ledger", task.Id)
+		tea.Infof("scheduler: task=%s added to ledger", task.Id)
 	}
 
 	return s
 }
 
 // Worker creates a new worker for handling scheduled tasks.
-func (s *Scheduler) Worker(job func(task *Task)) *worker.Worker {
+func (s *Scheduler) Worker(job func(task *Task)) *Worker {
 	h := func(ctx context.Context) {
-		log.Debug("scheduler.worker.job: started")
+		tea.Debug("scheduler.worker.job: started")
 		for {
 			dequeueCtx, cancel := context.WithTimeout(ctx, s.dequeueTimeout)
 			msg, err := s.queue.Dequeue(dequeueCtx)
@@ -154,10 +137,10 @@ func (s *Scheduler) Worker(job func(task *Task)) *worker.Worker {
 			}
 
 			go func() {
-				log.Infof("scheduler.worker.job: item=%s", msg.Id)
+				tea.Infof("scheduler.worker.job: item=%s", msg.Id)
 				defer func() {
 					if err := msg.Ack(ctx); err != nil {
-						errors.Send(err)
+						tea.SendError(err)
 					}
 
 					if s.notifyWorker != nil {
@@ -167,17 +150,17 @@ func (s *Scheduler) Worker(job func(task *Task)) *worker.Worker {
 
 				var task Task
 				if err := msg.Decode(&task); err != nil {
-					errors.Send(err)
+					tea.SendError(err)
 					return
 				}
 				job(&task)
-				log.Infof("scheduler.worker.job: task=%s handled", task.Id)
+				tea.Infof("scheduler.worker.job: task=%s handled", task.Id)
 			}()
 		}
-		log.Debugf("scheduler.worker.job: finished")
+		tea.Debugf("scheduler.worker.job: finished")
 	}
 
-	w := worker.New(h)
+	w := NewWorker(h)
 	return w
 }
 
@@ -187,7 +170,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Info("scheduler: background task #1 stopped")
+				tea.Info("scheduler: background task #1 stopped")
 				return
 			case <-time.After(s.interval):
 			}
@@ -218,7 +201,7 @@ func (s *Scheduler) start(ctx context.Context) {
 					defer cancel()
 
 					if err := s.queue.Enqueue(ctx, task.Id, task); err != nil {
-						errors.Send(err)
+						tea.SendError(err)
 						return
 					}
 
@@ -227,7 +210,7 @@ func (s *Scheduler) start(ctx context.Context) {
 						s.completed <- task
 					}
 
-					log.Infof("scheduler: task=%s scheduled", task.Id)
+					tea.Infof("scheduler: task=%s scheduled", task.Id)
 				}(task)
 			}
 			s.lock.RUnlock()
@@ -238,7 +221,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Info("scheduler: background task #2 stopped")
+				tea.Info("scheduler: background task #2 stopped")
 				return
 			case <-time.After(s.interval):
 			}
@@ -249,7 +232,7 @@ func (s *Scheduler) start(ctx context.Context) {
 					s.lock.Lock()
 					delete(s.tasks, task.Id)
 					s.lock.Unlock()
-					log.Infof("scheduler: task=%s removed from ledger", task.Id)
+					tea.Infof("scheduler: task=%s removed from ledger", task.Id)
 				default:
 					removing = false
 				}
@@ -260,11 +243,11 @@ func (s *Scheduler) start(ctx context.Context) {
 	<-ctx.Done()
 }
 
-// New creates a scheduler instance.
-func New(queue *eque.Red) *Scheduler {
+// NewScheduler creates a scheduler instance.
+func NewScheduler(queue *Red) *Scheduler {
 	s := Scheduler{
 		queue:          queue,
-		interval:       DefaultInterval,
+		interval:       DefaultSchedulerInterval,
 		enqueueTimeout: DefaultEnqueueTimeout,
 		dequeueTimeout: DefaultDequeueTimeout,
 		tasks:          make(map[string]*Task),
@@ -377,7 +360,7 @@ func (t *Task) SetRecurrence(rfc string) error {
 	defer t.Schedule.Unlock()
 
 	if _, err := rrule.StrToRRule(rfc); err != nil {
-		return errors.BadRequest(err)
+		return tea.BadRequest(err)
 	}
 
 	t.Schedule.Recurrence = rfc

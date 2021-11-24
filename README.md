@@ -1,27 +1,24 @@
-# go-eque
+# go-red
 
-Exclusive message queue built upon Redis, written in Go.
+Golang exclusive message queue built upon Redis.
 
 ## Installation
 
-go-eque may be installed using the go get command:
+go-red may be installed using the go get command:
 ```
-go get github.com/pghq/go-eque
+go get github.com/pghq/go-red
 ```
 ## Usage
 
 ```
-import "github.com/pghq/go-eque/eque"
+import "github.com/pghq/go-red"
 ```
 
 To create a new queue:
 
 ```
-queue, err := eque.New("name-of-your-queue")
+queue, err := red.NewQueue("name-of-your-queue")
 if err != nil{
     panic(err)
 }
 ```
-
-
-p.s. - it's pronounced EQ.
