@@ -76,7 +76,7 @@ func (s *Scheduler) Start() {
 
 	s.wg.Add(1)
 	go s.start(ctx)
-	tea.Info("scheduler: started")
+	tea.Log("info", "scheduler: started")
 
 	<-s.stop
 	cancel()
@@ -85,7 +85,7 @@ func (s *Scheduler) Start() {
 		s.Stop()
 	}()
 	<-s.stop
-	tea.Info("scheduler: stopped")
+	tea.Log("info", "scheduler: stopped")
 }
 
 // Stop stops the scheduler and waits for background jobs to finish.
@@ -107,14 +107,14 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 		_, present := s.tasks[task.Id]
 		s.lock.RUnlock()
 		if present {
-			tea.Infof("scheduler: task=%s already in ledger", task.Id)
+			tea.Logf("info", "scheduler: task=%s already in ledger", task.Id)
 			continue
 		}
 
 		s.lock.Lock()
 		s.tasks[task.Id] = task
 		s.lock.Unlock()
-		tea.Infof("scheduler: task=%s added to ledger", task.Id)
+		tea.Logf("info", "scheduler: task=%s added to ledger", task.Id)
 	}
 
 	return s
@@ -123,7 +123,7 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 // Worker creates a new worker for handling scheduled tasks.
 func (s *Scheduler) Worker(job func(task *Task)) *Worker {
 	h := func(ctx context.Context) {
-		tea.Debug("scheduler.worker.job: started")
+		tea.Logf("debug", "scheduler.worker.job: started")
 		for {
 			dequeueCtx, cancel := context.WithTimeout(ctx, s.dequeueTimeout)
 			msg, err := s.queue.Dequeue(dequeueCtx)
@@ -137,7 +137,7 @@ func (s *Scheduler) Worker(job func(task *Task)) *Worker {
 			}
 
 			go func() {
-				tea.Infof("scheduler.worker.job: item=%s", msg.Id)
+				tea.Logf("info", "scheduler.worker.job: item=%s", msg.Id)
 				defer func() {
 					if err := msg.Ack(ctx); err != nil {
 						tea.SendError(err)
@@ -154,10 +154,10 @@ func (s *Scheduler) Worker(job func(task *Task)) *Worker {
 					return
 				}
 				job(&task)
-				tea.Infof("scheduler.worker.job: task=%s handled", task.Id)
+				tea.Logf("info", "scheduler.worker.job: task=%s handled", task.Id)
 			}()
 		}
-		tea.Debugf("scheduler.worker.job: finished")
+		tea.Logf("debug", "scheduler.worker.job: finished")
 	}
 
 	w := NewWorker(h)
@@ -170,7 +170,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				tea.Info("scheduler: background task #1 stopped")
+				tea.Log("info", "scheduler: background task #1 stopped")
 				return
 			case <-time.After(s.interval):
 			}
@@ -210,7 +210,7 @@ func (s *Scheduler) start(ctx context.Context) {
 						s.completed <- task
 					}
 
-					tea.Infof("scheduler: task=%s scheduled", task.Id)
+					tea.Logf("info", "scheduler: task=%s scheduled", task.Id)
 				}(task)
 			}
 			s.lock.RUnlock()
@@ -221,7 +221,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				tea.Info("scheduler: background task #2 stopped")
+				tea.Log("info", "scheduler: background task #2 stopped")
 				return
 			case <-time.After(s.interval):
 			}
@@ -232,7 +232,7 @@ func (s *Scheduler) start(ctx context.Context) {
 					s.lock.Lock()
 					delete(s.tasks, task.Id)
 					s.lock.Unlock()
-					tea.Infof("scheduler: task=%s removed from ledger", task.Id)
+					tea.Logf("info", "scheduler: task=%s removed from ledger", task.Id)
 				default:
 					removing = false
 				}
