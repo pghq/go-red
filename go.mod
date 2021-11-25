@@ -7,7 +7,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.3
 	github.com/go-redis/redismock/v8 v8.0.6
 	github.com/go-redsync/redsync/v4 v4.4.1
-	github.com/pghq/go-tea v0.0.27
+	github.com/pghq/go-tea v0.0.29
 	github.com/stretchr/testify v1.7.0
 	github.com/teambition/rrule-go v1.7.2
 )
@@ -22,7 +22,6 @@ require (
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.0 // indirect
 	github.com/hashicorp/go-version v1.3.0 // indirect
-	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rs/cors v1.8.0 // indirect

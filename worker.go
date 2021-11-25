@@ -33,7 +33,7 @@ func (w *Worker) Start() {
 		go w.start(ctx, i+1)
 	}
 
-	tea.Infof("worker: workers=%d, started", w.instances)
+	tea.Logf("info", "worker: workers=%d, started", w.instances)
 
 	<-w.stop
 	cancel()
@@ -42,7 +42,7 @@ func (w *Worker) Start() {
 		w.Stop()
 	}()
 	<-w.stop
-	tea.Info("worker: stopped")
+	tea.Log("info", "worker: stopped")
 }
 
 // Concurrent sets the number of simultaneous instances to process tasks.
@@ -88,11 +88,11 @@ func (w *Worker) start(ctx context.Context, instance int) {
 						}
 					}()
 
-					tea.Debugf("worker: instance=%d, job=%d, started", instance, i)
+					tea.Logf("debug", "worker: instance=%d, job=%d, started", instance, i)
 					ctx, cancel := context.WithTimeout(ctx, w.interval)
 					defer cancel()
 					job(ctx)
-					tea.Debugf("worker: instance=%d, job=%d, finished", instance, i)
+					tea.Logf("debug", "worker: instance=%d, job=%d, finished", instance, i)
 				}(i, job)
 			}
 
@@ -100,9 +100,9 @@ func (w *Worker) start(ctx context.Context, instance int) {
 		}
 	}()
 
-	tea.Infof("worker: instance=%d, started", instance)
+	tea.Logf("info", "worker: instance=%d, started", instance)
 	<-ctx.Done()
-	tea.Infof("worker: instance=%d, stopped", instance)
+	tea.Logf("info", "worker: instance=%d, stopped", instance)
 }
 
 // NewWorker creates a new worker instance.

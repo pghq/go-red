@@ -17,8 +17,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	tea.LogWriter(io.Discard)
-	defer tea.ResetLog()
+	tea.SetGlobalLogWriter(io.Discard)
+	defer tea.ResetGlobalLogger()
 	code := m.Run()
 	os.Exit(code)
 }
