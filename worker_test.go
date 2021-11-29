@@ -10,7 +10,7 @@ import (
 
 func TestNewWorker(t *testing.T) {
 	t.Run("can create instance", func(t *testing.T) {
-		w := NewWorker()
+		w := NewWorker().Quiet()
 		assert.NotNil(t, w)
 		w.Stop()
 		w.Stop()
