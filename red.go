@@ -348,3 +348,22 @@ type Config struct {
 	errors    int
 	messages  int
 }
+
+// Log instance with quiet support
+type Log struct {
+	quiet bool
+}
+
+// Log value
+func (l Log) Log(level string, v ...interface{}) {
+	if !l.quiet {
+		tea.Log(level, v...)
+	}
+}
+
+// Logf formatted value
+func (l Log) Logf(level, format string, args ...interface{}) {
+	if !l.quiet {
+		tea.Logf(level, format, args...)
+	}
+}

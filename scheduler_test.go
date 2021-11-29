@@ -14,7 +14,7 @@ func TestNewScheduler(t *testing.T) {
 
 		queue, _ := NewQueue("", WithRedis(db))
 
-		s := NewScheduler(queue)
+		s := NewScheduler(queue).Quiet()
 		assert.NotNil(t, s)
 		assert.Equal(t, s.queue, queue)
 		assert.Equal(t, DefaultSchedulerInterval, s.interval)

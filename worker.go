@@ -23,6 +23,13 @@ type Worker struct {
 	stop      chan struct{}
 	jobs      []Job
 	wg        sync.WaitGroup
+	log       Log
+}
+
+// Quiet sets the log mod to errors only
+func (w *Worker) Quiet() *Worker {
+	w.log.quiet = true
+	return w
 }
 
 // Start begins processing tasks.
@@ -33,7 +40,7 @@ func (w *Worker) Start() {
 		go w.start(ctx, i+1)
 	}
 
-	tea.Logf("info", "worker: workers=%d, started", w.instances)
+	w.log.Logf("info", "worker: workers=%d, started", w.instances)
 
 	<-w.stop
 	cancel()
@@ -42,7 +49,7 @@ func (w *Worker) Start() {
 		w.Stop()
 	}()
 	<-w.stop
-	tea.Log("info", "worker: stopped")
+	w.log.Log("info", "worker: stopped")
 }
 
 // Concurrent sets the number of simultaneous instances to process tasks.
@@ -88,11 +95,11 @@ func (w *Worker) start(ctx context.Context, instance int) {
 						}
 					}()
 
-					tea.Logf("debug", "worker: instance=%d, job=%d, started", instance, i)
+					w.log.Logf("debug", "worker: instance=%d, job=%d, started", instance, i)
 					ctx, cancel := context.WithTimeout(ctx, w.interval)
 					defer cancel()
 					job(ctx)
-					tea.Logf("debug", "worker: instance=%d, job=%d, finished", instance, i)
+					w.log.Logf("debug", "worker: instance=%d, job=%d, finished", instance, i)
 				}(i, job)
 			}
 
@@ -100,9 +107,9 @@ func (w *Worker) start(ctx context.Context, instance int) {
 		}
 	}()
 
-	tea.Logf("info", "worker: instance=%d, started", instance)
+	w.log.Logf("info", "worker: instance=%d, started", instance)
 	<-ctx.Done()
-	tea.Logf("info", "worker: instance=%d, stopped", instance)
+	w.log.Logf("info", "worker: instance=%d, stopped", instance)
 }
 
 // NewWorker creates a new worker instance.
