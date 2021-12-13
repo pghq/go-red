@@ -1,6 +1,6 @@
 # go-red
 
-Golang scheduler, worker, and exclusive message queue.
+Golang distributed job scheduling.
 
 ## Installation
 
