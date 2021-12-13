@@ -15,10 +15,10 @@ const (
 	DefaultSchedulerInterval = time.Millisecond
 
 	// DefaultEnqueueTimeout is the default time allowed for queue write ops
-	DefaultEnqueueTimeout = 10 * time.Millisecond
+	DefaultEnqueueTimeout = 100 * time.Millisecond
 
 	// DefaultDequeueTimeout is the default time allowed for queue read ops
-	DefaultDequeueTimeout = 10 * time.Millisecond
+	DefaultDequeueTimeout = 100 * time.Millisecond
 
 	// DefaultSchedulerRetries is the default scheduler retries to obtain exclusivity
 	DefaultSchedulerRetries = 13
@@ -37,8 +37,6 @@ type Scheduler struct {
 	tasks          map[string]*Task
 	completed      chan *Task
 	wg             sync.WaitGroup
-	notify         func(t *Task)
-	notifyWorker   func(msg *Message)
 	log            Log
 }
 
@@ -72,20 +70,6 @@ func (s *Scheduler) DequeueTimeout(timeout time.Duration) *Scheduler {
 // MaxRetries sets the maximum refresh attempts
 func (s *Scheduler) MaxRetries(count int) *Scheduler {
 	s.maxRetries = count
-
-	return s
-}
-
-// Notify is executed after a task has been scheduled, ignored or otherwise errored while attempting to
-func (s *Scheduler) Notify(notify func(t *Task)) *Scheduler {
-	s.notify = notify
-
-	return s
-}
-
-// NotifyWorker is executed after a message has been popped or otherwise errored while attempting to
-func (s *Scheduler) NotifyWorker(notify func(msg *Message)) *Scheduler {
-	s.notifyWorker = notify
 
 	return s
 }
@@ -150,17 +134,13 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 
 // Worker creates a new worker for handling scheduled tasks.
 func (s *Scheduler) Worker(job func(task *Task)) *Worker {
-	h := func(ctx context.Context) {
+	h := func(_ context.Context) {
 		s.log.Logf("debug", "scheduler.worker.job: started")
 		for {
-			dequeueCtx, cancel := context.WithTimeout(ctx, s.dequeueTimeout)
-			msg, err := s.queue.Dequeue(dequeueCtx)
+			ctx, cancel := context.WithTimeout(context.Background(), s.dequeueTimeout)
+			msg, err := s.queue.Dequeue(ctx)
 			cancel()
 			if err != nil {
-				if s.notifyWorker != nil {
-					go s.notifyWorker(nil)
-				}
-
 				break
 			}
 
@@ -169,10 +149,6 @@ func (s *Scheduler) Worker(job func(task *Task)) *Worker {
 				defer func() {
 					if err := msg.Ack(ctx); err != nil {
 						tea.SendError(err)
-					}
-
-					if s.notifyWorker != nil {
-						go s.notifyWorker(msg)
 					}
 				}()
 
@@ -220,18 +196,12 @@ func (s *Scheduler) start(ctx context.Context) {
 
 				if !task.CanSchedule(now) {
 					task.Unlock()
-					if s.notify != nil {
-						go s.notify(task)
-					}
 					continue
 				}
 
 				go func(task *Task) {
 					defer func() {
 						task.Unlock()
-						if s.notify != nil {
-							go s.notify(task)
-						}
 					}()
 					ctx, cancel := context.WithTimeout(ctx, s.enqueueTimeout)
 					defer cancel()

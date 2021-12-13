@@ -130,10 +130,9 @@ func TestScheduler_Start(t *testing.T) {
 		mx.Lock()
 		defer mx.Unlock()
 		task := NewTask("test")
-		done := make(chan struct{}, 1)
-		s := NewScheduler(queue).Add(task).Notify(func(t *Task) { done <- struct{}{} })
+		s := NewScheduler(queue).Add(task)
 		go s.Start()
-		<-done
+		<-time.After(100 * time.Millisecond)
 		s.Stop()
 	})
 
@@ -145,13 +144,9 @@ func TestScheduler_Start(t *testing.T) {
 		task := NewTask("test")
 		_ = task.SetRecurrence("DTSTART=99990101T000000Z;FREQ=DAILY")
 
-		done := make(chan struct{}, 1)
-		s := NewScheduler(queue).Add(task).Notify(func(t *Task) {
-			done <- struct{}{}
-		})
-
+		s := NewScheduler(queue).Add(task)
 		go s.Start()
-		<-done
+		<-time.After(100 * time.Millisecond)
 		s.Stop()
 		assert.False(t, task.IsComplete())
 		assert.Equal(t, 0, task.Occurrences())
@@ -163,12 +158,9 @@ func TestScheduler_Start(t *testing.T) {
 
 		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
 		task := NewTask("test")
-		done := make(chan struct{}, 1)
-		s := NewScheduler(queue).Add(task).Notify(func(t *Task) {
-			done <- struct{}{}
-		})
+		s := NewScheduler(queue).Add(task)
 		go s.Start()
-		<-done
+		<-time.After(100 * time.Millisecond)
 		s.Stop()
 		assert.True(t, task.IsComplete())
 		assert.Equal(t, 1, task.Occurrences())
@@ -183,25 +175,14 @@ func TestScheduler_Worker(t *testing.T) {
 		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1))
 
 		task := NewTask("test")
-		scheduled := make(chan struct{}, 1)
-		done := make(chan struct{}, 1)
-		s := NewScheduler(queue).Add(task).Add(task).
-			Notify(func(t *Task) {
-				scheduled <- struct{}{}
-			}).
-			NotifyWorker(func(msg *Message) {
-				if msg != nil {
-					done <- struct{}{}
-				}
-			})
+		s := NewScheduler(queue).Add(task).Add(task)
 		defer s.Stop()
 		go s.Start()
 
 		w := s.Worker(func(_ *Task) {})
-		<-scheduled
+		<-time.After(100 * time.Millisecond)
 		go w.Start()
 		defer w.Stop()
-		<-done
 	})
 
 	t.Run("can process tasks", func(t *testing.T) {
@@ -211,25 +192,14 @@ func TestScheduler_Worker(t *testing.T) {
 		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1))
 
 		task := NewTask("test")
-		scheduled := make(chan struct{}, 1)
-		done := make(chan struct{}, 1)
-		s := NewScheduler(queue).Add(task).Add(task).
-			Notify(func(t *Task) {
-				scheduled <- struct{}{}
-			}).
-			NotifyWorker(func(msg *Message) {
-				if msg != nil {
-					done <- struct{}{}
-				}
-			})
+		s := NewScheduler(queue).Add(task).Add(task)
 		defer s.Stop()
 		go s.Start()
-
+		<-time.After(100 * time.Millisecond)
 		w := s.Worker(func(_ *Task) {})
-		<-scheduled
 		go w.Start()
+		<-time.After(100 * time.Millisecond)
 		defer w.Stop()
-		<-done
 	})
 }
 
