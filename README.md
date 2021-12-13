@@ -1,6 +1,6 @@
 # go-red
 
-Golang exclusive message queue built upon Redis.
+Golang scheduler, worker, and exclusive message queue.
 
 ## Installation
 
@@ -22,3 +22,6 @@ if err != nil{
     panic(err)
 }
 ```
+
+## Powered By
+- Redis - https://redis.io

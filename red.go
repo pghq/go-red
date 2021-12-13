@@ -134,25 +134,21 @@ func NewQueue(addr string, opts ...Option) (*Red, error) {
 	}
 
 	mq, err := conn.OpenQueue(conf.name)
-	if err != nil {
-		return nil, tea.Error(err)
+	if err == nil {
+		err = mq.StartConsuming(int64(conf.consumers+1), conf.interval)
 	}
 
-	if err := mq.StartConsuming(int64(conf.consumers+1), conf.interval); err != nil {
-		return nil, tea.Error(err)
-	}
-
-	q.queue = mq
-	for i := 0; i < conf.consumers; i++ {
-		tag := fmt.Sprintf("red.consumer.%d", i+1)
-		_, err = mq.AddConsumerFunc(tag, q.consume)
-
-		if err != nil {
-			return nil, tea.Error(err)
+	if err == nil {
+		q.queue = mq
+		for i := 0; i < conf.consumers; i++ {
+			tag := fmt.Sprintf("red.consumer.%d", i+1)
+			if err == nil {
+				_, err = mq.AddConsumerFunc(tag, q.consume)
+			}
 		}
 	}
 
-	return &q, nil
+	return &q, err
 }
 
 // Message is a single instance of a message within the queue.
@@ -181,16 +177,13 @@ func (m *Message) Ack(ctx context.Context) error {
 	}
 
 	w := m.pool.NewMutex(fmt.Sprintf("red.w.%s", m.Id), m.writeOptions...)
-	if _, err := w.UnlockContext(ctx); err != nil {
-		return err
+	_, err := w.UnlockContext(ctx)
+	if err == nil {
+		r := m.pool.NewMutex(fmt.Sprintf("red.r.%s", m.Id), m.readOptions...)
+		_, err = r.UnlockContext(ctx)
 	}
 
-	r := m.pool.NewMutex(fmt.Sprintf("red.r.%s", m.Id), m.readOptions...)
-	if _, err := r.UnlockContext(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // Reject notifies upstream of unsuccessful message handling
@@ -202,16 +195,13 @@ func (m *Message) Reject(ctx context.Context) error {
 	}
 
 	w := m.pool.NewMutex(fmt.Sprintf("red.w.%s", m.Id), m.writeOptions...)
-	if _, err := w.UnlockContext(ctx); err != nil {
-		return err
+	_, err := w.UnlockContext(ctx)
+	if err == nil {
+		r := m.pool.NewMutex(fmt.Sprintf("red.r.%s", m.Id), m.readOptions...)
+		_, err = r.UnlockContext(ctx)
 	}
 
-	r := m.pool.NewMutex(fmt.Sprintf("red.r.%s", m.Id), m.readOptions...)
-	if _, err := r.UnlockContext(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // Option is an interface for tuning a specific parameter of the queue.
