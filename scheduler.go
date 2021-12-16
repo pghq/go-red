@@ -26,6 +26,7 @@ const (
 
 // Scheduler is an instance of a persistent background scheduler
 type Scheduler struct {
+	Worker         *Worker
 	interval       time.Duration
 	stop           chan struct{}
 	queue          *Red
@@ -88,12 +89,14 @@ func (s *Scheduler) Start() {
 	defer s.exclusive.UnlockContext(ctx)
 	s.wg.Add(1)
 	go s.start(ctx)
+	go s.Worker.Start()
 	s.log.Log("info", "scheduler: started")
 
 	<-s.stop
 	cancel()
 	go func() {
 		s.wg.Wait()
+		s.Worker.Stop()
 		s.Stop()
 	}()
 	<-s.stop
@@ -132,8 +135,8 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 	return s
 }
 
-// Worker creates a new worker for handling scheduled tasks.
-func (s *Scheduler) Worker(job func(task *Task)) *Worker {
+// newWorker creates a new worker for handling scheduled tasks.
+func (s *Scheduler) newWorker(job func(task *Task)) *Worker {
 	h := func(_ context.Context) {
 		s.log.Logf("debug", "scheduler.worker.job: started")
 		for {
@@ -162,8 +165,7 @@ func (s *Scheduler) Worker(job func(task *Task)) *Worker {
 		s.log.Logf("debug", "scheduler.worker.job: finished")
 	}
 
-	w := NewWorker(h)
-	return w
+	return NewWorker(h)
 }
 
 func (s *Scheduler) start(ctx context.Context) {
@@ -273,7 +275,7 @@ func (s *Scheduler) exclusivity(ctx context.Context) (*redsync.Mutex, error) {
 }
 
 // NewScheduler creates a scheduler instance.
-func NewScheduler(queue *Red) *Scheduler {
+func NewScheduler(queue *Red, callback func(task *Task)) *Scheduler {
 	s := Scheduler{
 		queue:          queue,
 		interval:       DefaultSchedulerInterval,
@@ -285,6 +287,7 @@ func NewScheduler(queue *Red) *Scheduler {
 		stop:           make(chan struct{}, 1),
 	}
 
+	s.Worker = s.newWorker(callback)
 	return &s
 }
 

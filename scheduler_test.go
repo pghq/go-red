@@ -14,7 +14,7 @@ func TestNewScheduler(t *testing.T) {
 
 		queue, _ := NewQueue("", WithRedis(db))
 
-		s := NewScheduler(queue).Quiet()
+		s := NewScheduler(queue, func(task *Task) {}).Quiet()
 		assert.NotNil(t, s)
 		assert.Equal(t, s.queue, queue)
 		assert.Equal(t, DefaultSchedulerInterval, s.interval)
@@ -34,7 +34,7 @@ func TestScheduler_Every(t *testing.T) {
 
 		queue, _ := NewQueue("", WithRedis(db))
 
-		s := NewScheduler(queue).Every(time.Second)
+		s := NewScheduler(queue, func(task *Task) {}).Every(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.interval)
 	})
@@ -47,7 +47,7 @@ func TestScheduler_EnqueueTimeout(t *testing.T) {
 
 		queue, _ := NewQueue("", WithRedis(db))
 
-		s := NewScheduler(queue).EnqueueTimeout(time.Second)
+		s := NewScheduler(queue, func(task *Task) {}).EnqueueTimeout(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.enqueueTimeout)
 	})
@@ -60,7 +60,7 @@ func TestScheduler_DequeueTimeout(t *testing.T) {
 
 		queue, _ := NewQueue("", WithRedis(db))
 
-		s := NewScheduler(queue).DequeueTimeout(time.Second)
+		s := NewScheduler(queue, func(task *Task) {}).DequeueTimeout(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.dequeueTimeout)
 	})
@@ -74,7 +74,7 @@ func TestScheduler_Add(t *testing.T) {
 		queue, _ := NewQueue("", WithRedis(db))
 
 		task := NewTask("")
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue, func(task *Task) {}).Add(task)
 		assert.NotNil(t, s)
 		assert.Empty(t, s.tasks)
 	})
@@ -86,7 +86,7 @@ func TestScheduler_Add(t *testing.T) {
 		queue, _ := NewQueue("", WithRedis(db))
 
 		task := NewTask("test")
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue, func(task *Task) {}).Add(task)
 		assert.NotNil(t, s)
 		assert.NotEmpty(t, s.tasks)
 		assert.Len(t, s.tasks, 1)
@@ -100,7 +100,7 @@ func TestScheduler_Add(t *testing.T) {
 		queue, _ := NewQueue("", WithRedis(db))
 
 		task := NewTask("test")
-		s := NewScheduler(queue).Add(task).Add(task)
+		s := NewScheduler(queue, func(task *Task) {}).Add(task).Add(task)
 		assert.NotNil(t, s)
 		assert.NotEmpty(t, s.tasks)
 		assert.Len(t, s.tasks, 1)
@@ -117,7 +117,7 @@ func TestScheduler_Start(t *testing.T) {
 		mx := queue.pool.NewMutex("red.scheduler.w")
 		mx.Lock()
 		defer mx.Unlock()
-		go NewScheduler(queue).MaxRetries(1).EnqueueTimeout(0).Start()
+		go NewScheduler(queue, func(task *Task) {}).MaxRetries(1).EnqueueTimeout(0).Start()
 		<-time.After(time.Millisecond)
 	})
 
@@ -130,7 +130,7 @@ func TestScheduler_Start(t *testing.T) {
 		mx.Lock()
 		defer mx.Unlock()
 		task := NewTask("test")
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue, func(task *Task) {}).Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
@@ -144,7 +144,7 @@ func TestScheduler_Start(t *testing.T) {
 		task := NewTask("test")
 		_ = task.SetRecurrence("DTSTART=99990101T000000Z;FREQ=DAILY")
 
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue, func(task *Task) {}).Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
@@ -158,7 +158,7 @@ func TestScheduler_Start(t *testing.T) {
 
 		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
 		task := NewTask("test")
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue, func(task *Task) {}).Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
@@ -175,14 +175,11 @@ func TestScheduler_Worker(t *testing.T) {
 		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1))
 
 		task := NewTask("test")
-		s := NewScheduler(queue).Add(task).Add(task)
+		s := NewScheduler(queue, func(_ *Task) {}).Add(task).Add(task)
 		defer s.Stop()
 		go s.Start()
 
-		w := s.Worker(func(_ *Task) {})
 		<-time.After(100 * time.Millisecond)
-		go w.Start()
-		defer w.Stop()
 	})
 
 	t.Run("can process tasks", func(t *testing.T) {
@@ -192,14 +189,10 @@ func TestScheduler_Worker(t *testing.T) {
 		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1))
 
 		task := NewTask("test")
-		s := NewScheduler(queue).Add(task).Add(task)
+		s := NewScheduler(queue, func(_ *Task) {}).Add(task).Add(task)
 		defer s.Stop()
 		go s.Start()
-		<-time.After(100 * time.Millisecond)
-		w := s.Worker(func(_ *Task) {})
-		go w.Start()
-		<-time.After(100 * time.Millisecond)
-		defer w.Stop()
+		<-time.After(200 * time.Millisecond)
 	})
 }
 
