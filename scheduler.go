@@ -87,18 +87,21 @@ func (s *Scheduler) Start() {
 
 	s.exclusive = w
 	defer s.exclusive.UnlockContext(ctx)
+
 	s.wg.Add(1)
 	go s.start(ctx)
 	go s.Worker.Start()
-	s.log.Log("info", "scheduler: started")
 
+	s.log.Log("info", "scheduler: started")
 	<-s.stop
 	cancel()
+
 	go func() {
 		s.wg.Wait()
 		s.Worker.Stop()
 		s.Stop()
 	}()
+
 	<-s.stop
 	s.log.Log("info", "scheduler: stopped")
 }
@@ -122,7 +125,7 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 		_, present := s.tasks[task.Id]
 		s.rwlock.RUnlock()
 		if present {
-			s.log.Logf("info", "scheduler: task=%s already in ledger", task.Id)
+			s.log.Logf("debug", "scheduler: task=%s already in ledger", task.Id)
 			continue
 		}
 
