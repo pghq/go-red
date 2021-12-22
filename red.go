@@ -86,7 +86,7 @@ func (r *Red) Error() error {
 func (r *Red) consume(delivery rmq.Delivery) {
 	var msg Message
 	if err := json.Unmarshal([]byte(delivery.Payload()), &msg); err != nil {
-		r.SendError(tea.Error(err))
+		r.SendError(tea.Stack(err))
 		return
 	}
 
@@ -130,7 +130,7 @@ func NewQueue(addr string, opts ...Option) (*Red, error) {
 
 	conn, err := rmq.OpenConnectionWithRedisClient(conf.name, client, q.errors)
 	if err != nil {
-		return nil, tea.Error(err)
+		return nil, tea.Stack(err)
 	}
 
 	mq, err := conn.OpenQueue(conf.name)
@@ -347,13 +347,13 @@ type Log struct {
 // Log value
 func (l Log) Log(level string, v ...interface{}) {
 	if !l.quiet {
-		tea.Log(level, v...)
+		tea.Log(context.Background(), level, v...)
 	}
 }
 
 // Logf formatted value
 func (l Log) Logf(level, format string, args ...interface{}) {
 	if !l.quiet {
-		tea.Logf(level, format, args...)
+		tea.Logf(context.Background(), level, format, args...)
 	}
 }

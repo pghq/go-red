@@ -15,7 +15,7 @@ func (r *Red) Dequeue(ctx context.Context) (*Message, error) {
 		default:
 			m := r.Message()
 			if m == nil {
-				return nil, tea.NewBadRequest("no messages")
+				return nil, tea.ErrBadRequest("no messages")
 			}
 
 			mutex := r.pool.NewMutex(fmt.Sprintf("red.r.%s", m.Id), r.readOptions...)

@@ -80,7 +80,7 @@ func (s *Scheduler) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	w, err := s.exclusivity(ctx)
 	if err != nil {
-		tea.SendError(err)
+		tea.Log(ctx, "error", err)
 		cancel()
 		return
 	}
@@ -154,7 +154,7 @@ func (s *Scheduler) newWorker(job func(task *Task)) *Worker {
 				s.log.Logf("info", "scheduler.worker.job: item=%s", msg.Id)
 				defer func() {
 					if err := msg.Ack(ctx); err != nil {
-						tea.SendError(err)
+						tea.Log(ctx, "error", err)
 					}
 				}()
 
@@ -177,7 +177,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			if _, err := s.exclusive.ExtendContext(ctx); err != nil {
 				s.Stop()
-				tea.SendError(err)
+				tea.Log(ctx, "error", err)
 				return
 			}
 		}
@@ -212,7 +212,7 @@ func (s *Scheduler) start(ctx context.Context) {
 					defer cancel()
 
 					if err := s.queue.Enqueue(ctx, task.Id, task); err != nil {
-						tea.SendError(err)
+						tea.Log(ctx, "error", err)
 						return
 					}
 
@@ -259,7 +259,7 @@ func (s *Scheduler) exclusivity(ctx context.Context) (*redsync.Mutex, error) {
 	retries := 0
 	for {
 		if retries >= s.maxRetries {
-			return nil, tea.NewError("failed to obtain exclusivity")
+			return nil, tea.Err("failed to obtain exclusivity")
 		}
 
 		<-time.After(wait)
@@ -396,7 +396,7 @@ func (t *Task) SetRecurrence(rfc string) error {
 	defer t.Schedule.Unlock()
 
 	if _, err := rrule.StrToRRule(rfc); err != nil {
-		return tea.BadRequest(err)
+		return tea.AsErrBadRequest(err)
 	}
 
 	t.Schedule.Recurrence = rfc
