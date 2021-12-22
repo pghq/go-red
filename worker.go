@@ -91,7 +91,7 @@ func (w *Worker) start(ctx context.Context, instance int) {
 					defer wg.Done()
 					defer func() {
 						if err := recover(); err != nil {
-							tea.Recover(err)
+							tea.Log(ctx, "error", err)
 						}
 					}()
 

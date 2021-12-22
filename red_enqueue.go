@@ -13,16 +13,16 @@ func (r *Red) Enqueue(ctx context.Context, id string, value interface{}) error {
 	mutex := r.pool.NewMutex(fmt.Sprintf("red.w.%s", id), r.writeOptions...)
 	if err := mutex.LockContext(ctx); err != nil {
 		if tea.IsError(err, redsync.ErrFailed) {
-			err = tea.BadRequest(err)
+			err = tea.AsErrBadRequest(err)
 		}
 
-		return tea.Error(err)
+		return tea.Stack(err)
 	}
 
 	err := func() error {
 		v, err := json.Marshal(value)
 		if err != nil {
-			return tea.NewBadRequest(err)
+			return tea.ErrBadRequest(err)
 		}
 
 		payload, _ := json.Marshal(&Message{Id: id, Value: v})
@@ -31,7 +31,7 @@ func (r *Red) Enqueue(ctx context.Context, id string, value interface{}) error {
 
 	if err != nil {
 		_, _ = mutex.UnlockContext(ctx)
-		return tea.Error(err)
+		return tea.Stack(err)
 	}
 
 	return nil

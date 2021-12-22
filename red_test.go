@@ -2,7 +2,6 @@ package red
 
 import (
 	"context"
-	"io"
 	"os"
 	"testing"
 	"time"
@@ -16,10 +15,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	tea.SetGlobalLogWriter(io.Discard)
-	defer tea.ResetGlobalLogger()
-	code := m.Run()
-	os.Exit(code)
+	tea.Testing()
+	os.Exit(m.Run())
 }
 
 func TestRed(t *testing.T) {
@@ -64,7 +61,7 @@ func TestRed(t *testing.T) {
 		defer teardown()
 
 		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1), MaxErrors(1))
-		err := tea.NewError("an error has occurred")
+		err := tea.Err("an error has occurred")
 		err = queue.SendError(err).SendError(err).Error()
 		assert.NotNil(t, err)
 		assert.Nil(t, queue.Error())
@@ -102,7 +99,7 @@ func TestRed(t *testing.T) {
 
 	t.Run("message raises ack errors", func(t *testing.T) {
 		msg := Message{
-			ack: func() error { return tea.NewError("an error has occurred") },
+			ack: func() error { return tea.Err("an error has occurred") },
 		}
 
 		err := msg.Ack(context.TODO())
@@ -127,7 +124,7 @@ func TestRed(t *testing.T) {
 
 	t.Run("message raises reject errors", func(t *testing.T) {
 		msg := Message{
-			reject: func() error { return tea.NewError("an error has occurred") },
+			reject: func() error { return tea.Err("an error has occurred") },
 		}
 
 		err := msg.Reject(context.TODO())
@@ -214,7 +211,7 @@ func TestRed(t *testing.T) {
 		mutex.Lock()
 		defer mutex.Unlock()
 
-		queue.Send(&Message{Id: "test", reject: func() error { return tea.NewError("an error") }})
+		queue.Send(&Message{Id: "test", reject: func() error { return tea.Err("an error") }})
 		ctx, cancel := context.WithTimeout(context.TODO(), time.Millisecond)
 		defer cancel()
 		_, err := queue.Dequeue(ctx)
@@ -228,7 +225,7 @@ func TestRed(t *testing.T) {
 		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
 
 		queue.Send(&Message{Id: "test", reject: func() error {
-			return tea.NewError("an error has occurred")
+			return tea.Err("an error has occurred")
 		}})
 		m, err := queue.Dequeue(context.TODO())
 		assert.Nil(t, err)
