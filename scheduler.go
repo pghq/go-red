@@ -154,6 +154,7 @@ func (s *Scheduler) Handle(fn func(task *Task)) {
 	s.worker.AddJobs(h)
 }
 
+// start background tasks and actually do the scheduling
 func (s *Scheduler) start(ctx context.Context) {
 	defer s.wg.Done()
 	go func() {
@@ -237,6 +238,7 @@ func (s *Scheduler) start(ctx context.Context) {
 	<-ctx.Done()
 }
 
+// lock the scheduler for exclusive rights
 func (s *Scheduler) lock(ctx context.Context) (*redsync.Mutex, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.syncTimeout)
 	defer cancel()

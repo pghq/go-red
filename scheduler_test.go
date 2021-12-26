@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewScheduler(t *testing.T) {
+	t.Parallel()
+
 	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("can create instance", func(t *testing.T) {
 		s := NewScheduler(queue)
@@ -26,6 +28,8 @@ func TestNewScheduler(t *testing.T) {
 }
 
 func TestScheduler_Every(t *testing.T) {
+	t.Parallel()
+
 	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("can set new value", func(t *testing.T) {
 		s := NewScheduler(queue).Every(time.Second)
@@ -35,6 +39,8 @@ func TestScheduler_Every(t *testing.T) {
 }
 
 func TestScheduler_EnqueueTimeout(t *testing.T) {
+	t.Parallel()
+
 	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("can set new value", func(t *testing.T) {
 		s := NewScheduler(queue).EnqueueTimeout(time.Second)
@@ -44,6 +50,8 @@ func TestScheduler_EnqueueTimeout(t *testing.T) {
 }
 
 func TestScheduler_DequeueTimeout(t *testing.T) {
+	t.Parallel()
+
 	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("can set new value", func(t *testing.T) {
 		s := NewScheduler(queue).DequeueTimeout(time.Second)
@@ -53,6 +61,8 @@ func TestScheduler_DequeueTimeout(t *testing.T) {
 }
 
 func TestScheduler_Add(t *testing.T) {
+	t.Parallel()
+
 	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("raises missing id errors", func(t *testing.T) {
 		task := NewTask("")
@@ -81,6 +91,8 @@ func TestScheduler_Add(t *testing.T) {
 }
 
 func TestScheduler_Start(t *testing.T) {
+	t.Parallel()
+
 	t.Run("failed to obtain exclusivity", func(t *testing.T) {
 		queue := New(fmt.Sprintf("%s?queue=timeout", queue.URL.String()))
 		mx := queue.Lock("scheduler", redsync.WithTries(3))
@@ -130,6 +142,8 @@ func TestScheduler_Start(t *testing.T) {
 }
 
 func TestScheduler_Worker(t *testing.T) {
+	t.Parallel()
+
 	t.Run("raises message errors", func(t *testing.T) {
 		queue := New(fmt.Sprintf("%s?queue=message:error", queue.URL.String()))
 		task := NewTask("error:test")
@@ -153,6 +167,8 @@ func TestScheduler_Worker(t *testing.T) {
 }
 
 func TestTask_CanSchedule(t *testing.T) {
+	t.Parallel()
+
 	t.Run("tasks not after do not schedule", func(t *testing.T) {
 		task := NewTask("test")
 		_ = task.SetRecurrence("UNTIL=19700101T000000Z;FREQ=DAILY")
@@ -186,6 +202,8 @@ func TestTask_CanSchedule(t *testing.T) {
 }
 
 func TestTask_IsComplete(t *testing.T) {
+	t.Parallel()
+
 	t.Run("tasks that have ended are complete", func(t *testing.T) {
 		task := NewTask("test")
 		_ = task.SetRecurrence("UNTIL=19700101T000000Z;FREQ=DAILY")
@@ -210,6 +228,8 @@ func TestTask_IsComplete(t *testing.T) {
 }
 
 func TestTask_SetRecurrence(t *testing.T) {
+	t.Parallel()
+
 	t.Run("does not set task with bad recurrence", func(t *testing.T) {
 		task := NewTask("test")
 		err := task.SetRecurrence("DAILY")

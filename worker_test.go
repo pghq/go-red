@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewQWorker(t *testing.T) {
+	t.Parallel()
+
 	t.Run("can create instance", func(t *testing.T) {
 		w := NewQWorker()
 		assert.NotNil(t, w)
@@ -18,6 +20,8 @@ func TestNewQWorker(t *testing.T) {
 }
 
 func TestWorker_Every(t *testing.T) {
+	t.Parallel()
+
 	t.Run("sets a new value", func(t *testing.T) {
 		w := NewWorker().Every(time.Second)
 		assert.NotNil(t, w)
@@ -26,6 +30,8 @@ func TestWorker_Every(t *testing.T) {
 }
 
 func TestWorker_Concurrent(t *testing.T) {
+	t.Parallel()
+
 	t.Run("sets a new value", func(t *testing.T) {
 		w := NewWorker().Concurrent(5)
 		assert.NotNil(t, w)
@@ -34,6 +40,8 @@ func TestWorker_Concurrent(t *testing.T) {
 }
 
 func TestWorker_Start(t *testing.T) {
+	t.Parallel()
+
 	t.Run("can run", func(t *testing.T) {
 		done := make(chan struct{}, 2)
 		job := func(ctx context.Context) {
