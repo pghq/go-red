@@ -38,6 +38,11 @@ type Red struct {
 	worker    *Worker
 }
 
+// Schedule task
+func (r Red) Schedule(tasks ...*Task) {
+	r.scheduler.Add(tasks...)
+}
+
 // StartScheduling tasks
 func (r Red) StartScheduling(fn func(task *Task), jobs ...Job) {
 	r.scheduler.Handle(fn)

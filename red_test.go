@@ -181,6 +181,7 @@ func TestRed(t *testing.T) {
 	t.Run("can schedule", func(t *testing.T) {
 		queue.StartScheduling(func(task *Task) {})
 		defer queue.StopScheduling()
+		queue.Schedule(NewTask("test"))
 	})
 }
 
