@@ -19,32 +19,22 @@ const (
 
 	// DefaultDequeueTimeout is the default time allowed for queue read ops
 	DefaultDequeueTimeout = 100 * time.Millisecond
-
-	// DefaultSchedulerRetries is the default scheduler retries to obtain exclusivity
-	DefaultSchedulerRetries = 13
 )
 
 // Scheduler is an instance of a persistent background scheduler
 type Scheduler struct {
-	Worker         *Worker
+	worker         *Worker
 	interval       time.Duration
 	stop           chan struct{}
 	queue          *Red
+	sync           *redsync.Mutex
+	syncTimeout    time.Duration
 	enqueueTimeout time.Duration
 	dequeueTimeout time.Duration
-	maxRetries     int
-	exclusive      *redsync.Mutex
 	rwlock         sync.RWMutex
 	tasks          map[string]*Task
 	completed      chan *Task
 	wg             sync.WaitGroup
-	log            Log
-}
-
-// Quiet sets the log mod to errors only
-func (s *Scheduler) Quiet() *Scheduler {
-	s.log.quiet = true
-	return s
 }
 
 // Every sets the interval for checking for new jobs to scheduler.
@@ -68,42 +58,35 @@ func (s *Scheduler) DequeueTimeout(timeout time.Duration) *Scheduler {
 	return s
 }
 
-// MaxRetries sets the maximum refresh attempts
-func (s *Scheduler) MaxRetries(count int) *Scheduler {
-	s.maxRetries = count
-
-	return s
-}
-
 // Start begins scheduling tasks.
 func (s *Scheduler) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
-	w, err := s.exclusivity(ctx)
+	w, err := s.lock(ctx)
 	if err != nil {
 		tea.Log(ctx, "error", err)
 		cancel()
 		return
 	}
 
-	s.exclusive = w
-	defer s.exclusive.UnlockContext(ctx)
+	s.sync = w
+	defer s.sync.UnlockContext(ctx)
 
 	s.wg.Add(1)
 	go s.start(ctx)
-	go s.Worker.Start()
+	go s.worker.Start()
 
-	s.log.Log("info", "scheduler: started")
+	tea.Log(ctx, "info", "scheduler: started")
 	<-s.stop
 	cancel()
 
 	go func() {
 		s.wg.Wait()
-		s.Worker.Stop()
+		s.worker.Stop()
 		s.Stop()
 	}()
 
 	<-s.stop
-	s.log.Log("info", "scheduler: stopped")
+	tea.Log(ctx, "info", "scheduler: stopped")
 }
 
 // Stop stops the scheduler and waits for background jobs to finish.
@@ -125,23 +108,23 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 		_, present := s.tasks[task.Id]
 		s.rwlock.RUnlock()
 		if present {
-			s.log.Logf("debug", "scheduler: task=%s already in ledger", task.Id)
+			tea.Logf(context.Background(), "debug", "scheduler: task=%s already in ledger", task.Id)
 			continue
 		}
 
 		s.rwlock.Lock()
 		s.tasks[task.Id] = task
 		s.rwlock.Unlock()
-		s.log.Logf("info", "scheduler: task=%s added to ledger", task.Id)
+		tea.Logf(context.Background(), "info", "scheduler: task=%s added to ledger", task.Id)
 	}
 
 	return s
 }
 
-// newWorker creates a new worker for handling scheduled tasks.
-func (s *Scheduler) newWorker(job func(task *Task)) *Worker {
-	h := func(_ context.Context) {
-		s.log.Logf("debug", "scheduler.worker.job: started")
+// Handle tasks when scheduled
+func (s *Scheduler) Handle(fn func(task *Task)) {
+	h := func(ctx context.Context) {
+		tea.Logf(ctx, "debug", "scheduler.worker.job: started")
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), s.dequeueTimeout)
 			msg, err := s.queue.Dequeue(ctx)
@@ -151,7 +134,7 @@ func (s *Scheduler) newWorker(job func(task *Task)) *Worker {
 			}
 
 			go func() {
-				s.log.Logf("info", "scheduler.worker.job: item=%s", msg.Id)
+				tea.Logf(ctx, "info", "scheduler.worker.job: item=%s", msg.Id)
 				defer func() {
 					if err := msg.Ack(ctx); err != nil {
 						tea.Log(ctx, "error", err)
@@ -160,22 +143,22 @@ func (s *Scheduler) newWorker(job func(task *Task)) *Worker {
 
 				var task Task
 				if err := msg.Decode(&task); err == nil {
-					job(&task)
-					s.log.Logf("info", "scheduler.worker.job: task=%s handled", task.Id)
+					fn(&task)
+					tea.Logf(ctx, "info", "scheduler.worker.job: task=%s handled", task.Id)
 				}
 			}()
 		}
-		s.log.Logf("debug", "scheduler.worker.job: finished")
+		tea.Logf(ctx, "debug", "scheduler.worker.job: finished")
 	}
 
-	return NewWorker(h)
+	s.worker.AddJobs(h)
 }
 
 func (s *Scheduler) start(ctx context.Context) {
 	defer s.wg.Done()
 	go func() {
 		for {
-			if _, err := s.exclusive.ExtendContext(ctx); err != nil {
+			if _, err := s.sync.ExtendContext(ctx); err != nil {
 				s.Stop()
 				tea.Log(ctx, "error", err)
 				return
@@ -187,7 +170,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				s.log.Log("info", "scheduler: background task #2 stopped")
+				tea.Log(ctx, "info", "scheduler: background task #2 stopped")
 				return
 			case <-time.After(s.interval):
 			}
@@ -221,7 +204,7 @@ func (s *Scheduler) start(ctx context.Context) {
 						s.completed <- task
 					}
 
-					s.log.Logf("info", "scheduler: task=%s scheduled", task.Id)
+					tea.Logf(ctx, "info", "scheduler: task=%s scheduled", task.Id)
 				}(task)
 			}
 			s.rwlock.RUnlock()
@@ -232,7 +215,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				s.log.Log("info", "scheduler: background task #3 stopped")
+				tea.Log(ctx, "info", "scheduler: background task #3 stopped")
 				return
 			case <-time.After(s.interval):
 			}
@@ -243,7 +226,7 @@ func (s *Scheduler) start(ctx context.Context) {
 					s.rwlock.Lock()
 					delete(s.tasks, task.Id)
 					s.rwlock.Unlock()
-					s.log.Logf("info", "scheduler: task=%s removed from ledger", task.Id)
+					tea.Logf(ctx, "info", "scheduler: task=%s removed from ledger", task.Id)
 				default:
 					removing = false
 				}
@@ -254,43 +237,30 @@ func (s *Scheduler) start(ctx context.Context) {
 	<-ctx.Done()
 }
 
-func (s *Scheduler) exclusivity(ctx context.Context) (*redsync.Mutex, error) {
-	wait := time.Millisecond
-	retries := 0
-	for {
-		if retries >= s.maxRetries {
-			return nil, tea.Err("failed to obtain exclusivity")
-		}
-
-		<-time.After(wait)
-		w := s.queue.pool.NewMutex("red.scheduler.w", redsync.WithExpiry(s.interval+time.Second))
-		ctx, cancel := context.WithTimeout(ctx, s.enqueueTimeout)
-		if err := w.LockContext(ctx); err != nil {
-			wait *= 2
-			retries += 1
-			cancel()
-			continue
-		}
-
-		cancel()
-		return w, nil
+func (s *Scheduler) lock(ctx context.Context) (*redsync.Mutex, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.syncTimeout)
+	defer cancel()
+	w := s.queue.Lock("scheduler", redsync.WithExpiry(s.interval+time.Second), redsync.WithTries(13))
+	if err := w.LockContext(ctx); err != nil {
+		return nil, tea.Stack(err)
 	}
+	return w, nil
 }
 
 // NewScheduler creates a scheduler instance.
-func NewScheduler(queue *Red, callback func(task *Task)) *Scheduler {
+func NewScheduler(queue *Red) *Scheduler {
 	s := Scheduler{
+		worker:         NewWorker(),
 		queue:          queue,
 		interval:       DefaultSchedulerInterval,
 		enqueueTimeout: DefaultEnqueueTimeout,
 		dequeueTimeout: DefaultDequeueTimeout,
-		maxRetries:     DefaultSchedulerRetries,
+		syncTimeout:    5 * time.Minute,
 		tasks:          make(map[string]*Task),
 		completed:      make(chan *Task),
 		stop:           make(chan struct{}, 1),
 	}
 
-	s.Worker = s.newWorker(callback)
 	return &s
 }
 

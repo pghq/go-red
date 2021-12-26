@@ -10,7 +10,7 @@ import (
 
 const (
 	// DefaultInstances is the default number of simultaneous workers
-	DefaultInstances = 1
+	DefaultInstances = 2
 
 	// DefaultWorkerInterval is the default period between running batches of jobs
 	DefaultWorkerInterval = time.Millisecond
@@ -26,10 +26,9 @@ type Worker struct {
 	log       Log
 }
 
-// Quiet sets the log mod to errors only
-func (w *Worker) Quiet() *Worker {
-	w.log.quiet = true
-	return w
+// AddJobs adds jobs to the worker
+func (w *Worker) AddJobs(jobs ...Job) {
+	w.jobs = append(w.jobs, jobs...)
 }
 
 // Start begins processing tasks.
@@ -124,5 +123,29 @@ func NewWorker(jobs ...Job) *Worker {
 	return &w
 }
 
+// NewQWorker creates a new worker instance with quiet mode enabled.
+func NewQWorker(jobs ...Job) *Worker {
+	w := NewWorker(jobs...)
+	w.log.quiet = true
+	return w
+}
+
 // Job is a task to be executed.
 type Job func(ctx context.Context)
+
+// Log instance with quiet support
+type Log struct{ quiet bool }
+
+// Log value
+func (l Log) Log(level string, v ...interface{}) {
+	if !l.quiet {
+		tea.Log(context.Background(), level, v...)
+	}
+}
+
+// Logf formatted value
+func (l Log) Logf(level, format string, args ...interface{}) {
+	if !l.quiet {
+		tea.Logf(context.Background(), level, format, args...)
+	}
+}

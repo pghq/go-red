@@ -9,13 +9,18 @@ import (
 	"github.com/pghq/go-tea"
 )
 
-func (r *Red) Enqueue(ctx context.Context, id string, value interface{}) error {
-	mutex := r.pool.NewMutex(fmt.Sprintf("red.w.%s", id), r.writeOptions...)
+// Enqueue message into queue
+func (r *Red) Enqueue(ctx context.Context, key, value interface{}) error {
+	if err := r.Error(); err != nil {
+		return tea.Stack(err)
+	}
+
+	id := fmt.Sprintf("%s", key)
+	mutex := r.Lock(id)
 	if err := mutex.LockContext(ctx); err != nil {
 		if tea.IsError(err, redsync.ErrFailed) {
 			err = tea.AsErrBadRequest(err)
 		}
-
 		return tea.Stack(err)
 	}
 

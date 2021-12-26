@@ -1,20 +1,18 @@
 package red
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/go-redsync/redsync/v4"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewScheduler(t *testing.T) {
+	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("can create instance", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db))
-
-		s := NewScheduler(queue, func(task *Task) {}).Quiet()
+		s := NewScheduler(queue)
 		assert.NotNil(t, s)
 		assert.Equal(t, s.queue, queue)
 		assert.Equal(t, DefaultSchedulerInterval, s.interval)
@@ -28,65 +26,44 @@ func TestNewScheduler(t *testing.T) {
 }
 
 func TestScheduler_Every(t *testing.T) {
+	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("can set new value", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db))
-
-		s := NewScheduler(queue, func(task *Task) {}).Every(time.Second)
+		s := NewScheduler(queue).Every(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.interval)
 	})
 }
 
 func TestScheduler_EnqueueTimeout(t *testing.T) {
+	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("can set new value", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db))
-
-		s := NewScheduler(queue, func(task *Task) {}).EnqueueTimeout(time.Second)
+		s := NewScheduler(queue).EnqueueTimeout(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.enqueueTimeout)
 	})
 }
 
 func TestScheduler_DequeueTimeout(t *testing.T) {
+	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("can set new value", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db))
-
-		s := NewScheduler(queue, func(task *Task) {}).DequeueTimeout(time.Second)
+		s := NewScheduler(queue).DequeueTimeout(time.Second)
 		assert.NotNil(t, s)
 		assert.Equal(t, time.Second, s.dequeueTimeout)
 	})
 }
 
 func TestScheduler_Add(t *testing.T) {
+	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("raises missing id errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db))
-
 		task := NewTask("")
-		s := NewScheduler(queue, func(task *Task) {}).Add(task)
+		s := NewScheduler(queue).Add(task)
 		assert.NotNil(t, s)
 		assert.Empty(t, s.tasks)
 	})
 
 	t.Run("can enqueue", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db))
-
 		task := NewTask("test")
-		s := NewScheduler(queue, func(task *Task) {}).Add(task)
+		s := NewScheduler(queue).Add(task)
 		assert.NotNil(t, s)
 		assert.NotEmpty(t, s.tasks)
 		assert.Len(t, s.tasks, 1)
@@ -94,13 +71,8 @@ func TestScheduler_Add(t *testing.T) {
 	})
 
 	t.Run("does not add duplicates", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db))
-
 		task := NewTask("test")
-		s := NewScheduler(queue, func(task *Task) {}).Add(task).Add(task)
+		s := NewScheduler(queue).Add(task).Add(task)
 		assert.NotNil(t, s)
 		assert.NotEmpty(t, s.tasks)
 		assert.Len(t, s.tasks, 1)
@@ -110,41 +82,34 @@ func TestScheduler_Add(t *testing.T) {
 
 func TestScheduler_Start(t *testing.T) {
 	t.Run("failed to obtain exclusivity", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-		mx := queue.pool.NewMutex("red.scheduler.w")
+		queue := New(fmt.Sprintf("%s?queue=timeout", queue.URL.String()))
+		mx := queue.Lock("scheduler", redsync.WithTries(3))
 		mx.Lock()
 		defer mx.Unlock()
-		go NewScheduler(queue, func(task *Task) {}).MaxRetries(1).EnqueueTimeout(0).Start()
+		sched := NewScheduler(queue)
+		sched.syncTimeout = 0
+		go sched.EnqueueTimeout(0).Start()
 		<-time.After(time.Millisecond)
 	})
 
 	t.Run("raises enqueue errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-		mx := queue.pool.NewMutex("red.w.test")
+		queue := New(fmt.Sprintf("%s?queue=enqueue:error", queue.URL.String()))
+		mx := queue.Lock("enqueue:test")
 		mx.Lock()
 		defer mx.Unlock()
-		task := NewTask("test")
-		s := NewScheduler(queue, func(task *Task) {}).Add(task)
+		task := NewTask("enqueue:test")
+		s := NewScheduler(queue).Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
 	})
 
 	t.Run("ignores tasks not ready yet", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-		task := NewTask("test")
+		queue := New(fmt.Sprintf("%s?queue=ignore", queue.URL.String()))
+		task := NewTask("ignore:test")
 		_ = task.SetRecurrence("DTSTART=99990101T000000Z;FREQ=DAILY")
 
-		s := NewScheduler(queue, func(task *Task) {}).Add(task)
+		s := NewScheduler(queue).Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
@@ -153,12 +118,9 @@ func TestScheduler_Start(t *testing.T) {
 	})
 
 	t.Run("schedules tasks that are ready", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-		task := NewTask("test")
-		s := NewScheduler(queue, func(task *Task) {}).Add(task)
+		queue := New(fmt.Sprintf("%s?queue=ready", queue.URL.String()))
+		task := NewTask("ready:test")
+		s := NewScheduler(queue).Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
@@ -169,13 +131,10 @@ func TestScheduler_Start(t *testing.T) {
 
 func TestScheduler_Worker(t *testing.T) {
 	t.Run("raises message errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1))
-
-		task := NewTask("test")
-		s := NewScheduler(queue, func(_ *Task) {}).Add(task).Add(task)
+		queue := New(fmt.Sprintf("%s?queue=message:error", queue.URL.String()))
+		task := NewTask("error:test")
+		s := NewScheduler(queue).Add(task).Add(task)
+		s.Handle(func(task *Task) {})
 		defer s.Stop()
 		go s.Start()
 
@@ -183,13 +142,10 @@ func TestScheduler_Worker(t *testing.T) {
 	})
 
 	t.Run("can process tasks", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1))
-
-		task := NewTask("test")
-		s := NewScheduler(queue, func(_ *Task) {}).Add(task).Add(task)
+		queue := New(fmt.Sprintf("%s?queue=proccess", queue.URL.String()))
+		task := NewTask("process:test")
+		s := NewScheduler(queue).Add(task).Add(task)
+		s.Handle(func(task *Task) {})
 		defer s.Stop()
 		go s.Start()
 		<-time.After(200 * time.Millisecond)
@@ -197,7 +153,7 @@ func TestScheduler_Worker(t *testing.T) {
 }
 
 func TestTask_CanSchedule(t *testing.T) {
-	t.Run("tasks that have do not schedule", func(t *testing.T) {
+	t.Run("tasks not after do not schedule", func(t *testing.T) {
 		task := NewTask("test")
 		_ = task.SetRecurrence("UNTIL=19700101T000000Z;FREQ=DAILY")
 		canSchedule := task.CanSchedule(time.Now())
