@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewWorker(t *testing.T) {
+func TestNewQWorker(t *testing.T) {
 	t.Run("can create instance", func(t *testing.T) {
-		w := NewWorker().Quiet()
+		w := NewQWorker()
 		assert.NotNil(t, w)
 		w.Stop()
 		w.Stop()

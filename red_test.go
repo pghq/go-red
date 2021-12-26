@@ -2,89 +2,76 @@ package red
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/adjust/rmq/v4"
 	"github.com/alicebob/miniredis/v2"
-	"github.com/go-redis/redis/v8"
-	"github.com/go-redsync/redsync/v4"
 	"github.com/pghq/go-tea"
 	"github.com/stretchr/testify/assert"
 )
 
+var queue *Red
+
 func TestMain(m *testing.M) {
 	tea.Testing()
+	s, _ := miniredis.Run()
+	defer s.Close()
+	queue = New(fmt.Sprintf("redis://%s?queue=test", s.Addr()))
 	os.Exit(m.Run())
 }
 
 func TestRed(t *testing.T) {
+	t.Parallel()
+
 	t.Run("raises queue connection errors", func(t *testing.T) {
-		queue, err := NewQueue("")
-		assert.NotNil(t, err)
-		assert.Nil(t, queue)
-	})
+		t.Run("enqueue", func(t *testing.T) {
+			queue := New("")
+			assert.NotNil(t, queue)
+			assert.NotNil(t, queue.Enqueue(context.Background(), "", ""))
+		})
 
-	t.Run("can create instance", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		opts := []Option{
-			WithRedis(db),
-			WithConsumers(1),
-			Read(redsync.WithExpiry(time.Second)),
-			Write(redsync.WithExpiry(time.Second)),
-			Name("red.messages"),
-			At(time.Millisecond),
-		}
-		queue, err := NewQueue("", opts...)
-		assert.Nil(t, err)
-		assert.NotNil(t, queue)
-		assert.Equal(t, 1, len(queue.readOptions))
-		assert.Equal(t, 1, len(queue.writeOptions))
+		t.Run("dequeue", func(t *testing.T) {
+			queue := New("")
+			assert.NotNil(t, queue)
+			_, err := queue.Dequeue(context.Background())
+			assert.NotNil(t, err)
+		})
 	})
 
 	t.Run("can send messages", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1), MaxMessages(1))
 		msg := &Message{}
-		msg = queue.Send(msg).Send(msg).Message()
-		assert.NotNil(t, msg)
-		assert.Nil(t, queue.Message())
+		for i := 0; i <= 1024; i++ {
+			queue.send(msg)
+		}
+		for i := 0; i < 1024; i++ {
+			assert.NotNil(t, queue.message())
+		}
+		assert.Nil(t, queue.message())
+		assert.NotNil(t, queue.Error())
 	})
 
 	t.Run("can send errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(1), MaxErrors(1))
 		err := tea.Err("an error has occurred")
-		err = queue.SendError(err).SendError(err).Error()
-		assert.NotNil(t, err)
+		for i := 0; i <= 1024; i++ {
+			queue.sendError(err)
+		}
+		for i := 0; i < 1024; i++ {
+			assert.NotNil(t, queue.Error())
+		}
 		assert.Nil(t, queue.Error())
 	})
 
 	t.Run("raises consumption errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
 		queue.consume(&badDelivery{})
 		assert.NotNil(t, queue.Error())
 	})
 
 	t.Run("can consume deliveries", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
 		queue.consume(&goodDelivery{})
-		assert.NotNil(t, queue.Message())
+		assert.NotNil(t, queue.message())
 	})
 
 	t.Run("can decode messages", func(t *testing.T) {
@@ -107,15 +94,11 @@ func TestRed(t *testing.T) {
 	})
 
 	t.Run("can ack message", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
 		msg := Message{
-			Id:   "test",
-			pool: queue.pool,
-			ack:  func() error { return nil },
+			Id:    "test",
+			lock:  queue.Lock,
+			rlock: queue.RLock,
+			ack:   func() error { return nil },
 		}
 
 		err := msg.Ack(context.TODO())
@@ -132,15 +115,11 @@ func TestRed(t *testing.T) {
 	})
 
 	t.Run("can reject message", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
 		msg := Message{
-			Id:   "test",
-			pool: queue.pool,
-			ack:  func() error { return nil },
+			Id:    "test",
+			lock:  queue.Lock,
+			rlock: queue.RLock,
+			ack:   func() error { return nil },
 		}
 
 		err := msg.Reject(context.TODO())
@@ -148,44 +127,24 @@ func TestRed(t *testing.T) {
 	})
 
 	t.Run("enqueue raises busy lock errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0), Write(redsync.WithTries(1)))
-
-		_ = queue.Enqueue(context.TODO(), "test", "value")
-		err := queue.Enqueue(context.TODO(), "test", "value")
+		_ = queue.Enqueue(context.TODO(), "busy:test", "value")
+		err := queue.Enqueue(context.TODO(), "busy:test", "value")
 		assert.NotNil(t, err)
 		assert.False(t, tea.IsFatal(err))
 	})
 
 	t.Run("enqueue raises bad value errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
 		err := queue.Enqueue(context.TODO(), "test", func() {})
 		assert.NotNil(t, err)
 		assert.False(t, tea.IsFatal(err))
 	})
 
 	t.Run("can enqueue", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
-		err := queue.Enqueue(context.TODO(), "test", "value")
+		err := queue.Enqueue(context.TODO(), "ok:test", "value")
 		assert.Nil(t, err)
 	})
 
 	t.Run("dequeue raises ctx errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
 		ctx, cancel := context.WithTimeout(context.Background(), 0)
 		defer cancel()
 		_, err := queue.Dequeue(ctx)
@@ -193,25 +152,19 @@ func TestRed(t *testing.T) {
 	})
 
 	t.Run("dequeue raises empty queue errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
-		_, err := queue.Dequeue(context.TODO())
-		assert.NotNil(t, err)
+		for {
+			if _, err := queue.Dequeue(context.TODO()); err != nil {
+				break
+			}
+		}
 	})
 
 	t.Run("dequeue handles read lock errors", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-		mutex := queue.pool.NewMutex("red.r.test")
+		mutex := queue.RLock("dequeue:test")
 		mutex.Lock()
 		defer mutex.Unlock()
 
-		queue.Send(&Message{Id: "test", reject: func() error { return tea.Err("an error") }})
+		queue.send(&Message{Id: "dequeue:test", reject: func() error { return tea.Err("an error") }})
 		ctx, cancel := context.WithTimeout(context.TODO(), time.Millisecond)
 		defer cancel()
 		_, err := queue.Dequeue(ctx)
@@ -219,26 +172,16 @@ func TestRed(t *testing.T) {
 	})
 
 	t.Run("can dequeue", func(t *testing.T) {
-		db, teardown := setup(t)
-		defer teardown()
-
-		queue, _ := NewQueue("", WithRedis(db), WithConsumers(0))
-
-		queue.Send(&Message{Id: "test", reject: func() error {
-			return tea.Err("an error has occurred")
-		}})
 		m, err := queue.Dequeue(context.TODO())
 		assert.Nil(t, err)
 		assert.NotNil(t, m)
-		assert.Equal(t, "test", m.Id)
+		assert.Equal(t, "ok:test", m.Id)
 	})
 
-}
-
-func setup(t *testing.T) (*redis.Client, func()) {
-	t.Helper()
-	s, _ := miniredis.Run()
-	return redis.NewClient(&redis.Options{Addr: s.Addr()}), s.Close
+	t.Run("can schedule", func(t *testing.T) {
+		queue.StartScheduling(func(task *Task) {})
+		defer queue.StopScheduling()
+	})
 }
 
 // badDelivery is a partial mock for rmq deliveries with bad json

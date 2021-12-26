@@ -17,8 +17,8 @@ import "github.com/pghq/go-red"
 To create a new queue:
 
 ```
-queue, err := red.NewQueue("name-of-your-queue")
-if err != nil{
+queue := red.New("redis://user:pass@example.com?queue=messages")
+if err := queue.Enqueue(context.TODO(), "key", "value"); err != nil{
     panic(err)
 }
 ```
