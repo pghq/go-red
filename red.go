@@ -38,9 +38,19 @@ type Red struct {
 	worker    *Worker
 }
 
-// Schedule task
-func (r Red) Schedule(tasks ...*Task) {
-	r.scheduler.Add(tasks...)
+// Once schedules a task to be done once
+func (r Red) Once(key string) {
+	r.scheduler.Add(NewTask(key))
+}
+
+// Repeat schedules a task to be done at least once
+func (r Red) Repeat(key, recurrence string) error {
+	task := NewTask(key)
+	if err := task.SetRecurrence(recurrence); err != nil {
+		return tea.Stack(err)
+	}
+	r.scheduler.Add(task)
+	return nil
 }
 
 // StartScheduling tasks
