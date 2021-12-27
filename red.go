@@ -178,7 +178,7 @@ func New(redisURL string) *Red {
 	}
 
 	q.scheduler = NewScheduler(&q)
-	q.worker = NewWorker().Every(100 * time.Millisecond)
+	q.worker = NewWorker().Every(250 * time.Millisecond)
 	return &q
 }
 
