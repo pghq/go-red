@@ -10,7 +10,7 @@ import (
 
 const (
 	// DefaultInstances is the default number of simultaneous workers
-	DefaultInstances = 2
+	DefaultInstances = 1
 
 	// DefaultWorkerInterval is the default period between running batches of jobs
 	DefaultWorkerInterval = time.Millisecond
