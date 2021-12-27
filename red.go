@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version of the queue
-	Version = "0.0.21"
+	Version = "0.0.22"
 
 	// Prefix is the name prefix of the queue
 	Prefix = "go-red/v" + Version
@@ -178,7 +178,7 @@ func New(redisURL string) *Red {
 	}
 
 	q.scheduler = NewScheduler(&q)
-	q.worker = NewWorker().Every(50 * time.Millisecond)
+	q.worker = NewWorker()
 	return &q
 }
 
