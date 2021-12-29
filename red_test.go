@@ -142,10 +142,10 @@ func TestRed(t *testing.T) {
 	t.Run("can schedule", func(t *testing.T) {
 		queue.StartScheduling(func(task *Task) {}, func() {})
 		defer queue.StopScheduling()
-		queue.Wait()
 		queue.Once("test")
 		assert.NotNil(t, queue.Repeat("test", "DAILY"))
 		assert.Nil(t, queue.Repeat("test", "FREQ=DAILY;COUNT=1"))
+		queue.Wait()
 	})
 
 	t.Run("enqueue raises busy lock errors", func(t *testing.T) {
@@ -156,7 +156,7 @@ func TestRed(t *testing.T) {
 	})
 
 	t.Run("enqueue raises bad value errors", func(t *testing.T) {
-		err := queue.Enqueue(context.TODO(), "test", func() {})
+		err := queue.Enqueue(context.TODO(), "bad:test", func() {})
 		assert.NotNil(t, err)
 		assert.False(t, tea.IsFatal(err))
 	})

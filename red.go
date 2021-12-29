@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version of the queue
-	Version = "0.0.25"
+	Version = "0.0.26"
 
 	// Prefix is the name prefix of the queue
 	Prefix = "go-red/v" + Version
@@ -54,19 +54,15 @@ func (r Red) Repeat(key, recurrence string) error {
 	return nil
 }
 
-// Wait for next schedule
+// Wait for next task to be handled
 func (r Red) Wait() {
 	r.waits <- struct{}{}
 }
 
 // StartScheduling tasks
 func (r Red) StartScheduling(handler func(task *Task), schedulers ...func()) {
-	r.scheduler.Handle(handler)
-	job := func() {
-		for _, fn := range schedulers {
-			fn()
-		}
-
+	r.scheduler.Handle(func(task *Task) {
+		handler(task)
 		for {
 			select {
 			case <-r.waits:
@@ -74,8 +70,9 @@ func (r Red) StartScheduling(handler func(task *Task), schedulers ...func()) {
 				return
 			}
 		}
-	}
-	r.worker.AddJobs(job)
+	})
+
+	r.worker.AddJobs(schedulers...)
 	go r.scheduler.Start()
 	go r.worker.Start()
 }
