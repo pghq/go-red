@@ -21,13 +21,14 @@ type Worker struct {
 	instances int
 	interval  time.Duration
 	stop      chan struct{}
-	jobs      []Job
+	jobs      []func()
 	wg        sync.WaitGroup
 	log       Log
+	name      string
 }
 
 // AddJobs adds jobs to the worker
-func (w *Worker) AddJobs(jobs ...Job) {
+func (w *Worker) AddJobs(jobs ...func()) {
 	w.jobs = append(w.jobs, jobs...)
 }
 
@@ -39,7 +40,7 @@ func (w *Worker) Start() {
 		go w.start(ctx, i+1)
 	}
 
-	w.log.Logf("info", "worker: workers=%d, started", w.instances)
+	w.log.Logf("info", "%s.worker: workers=%d, started", w.name, w.instances)
 
 	<-w.stop
 	cancel()
@@ -48,7 +49,7 @@ func (w *Worker) Start() {
 		w.Stop()
 	}()
 	<-w.stop
-	w.log.Log("info", "worker: stopped")
+	w.log.Logf("info", "%s.worker: stopped", w.name)
 }
 
 // Concurrent sets the number of simultaneous instances to process tasks.
@@ -86,19 +87,18 @@ func (w *Worker) start(ctx context.Context, instance int) {
 
 			for i, job := range w.jobs {
 				wg.Add(1)
-				go func(i int, job Job) {
+				go func(i int, job func()) {
 					defer wg.Done()
-					defer func() {
-						if err := recover(); err != nil {
-							tea.Log(ctx, "error", err)
-						}
+					w.log.Logf("debug", "%s.worker: instance=%d, job=%d, started", w.name, instance, i)
+					go func() {
+						defer func() {
+							if err := recover(); err != nil {
+								tea.Log(ctx, "error", err)
+							}
+						}()
+						job()
 					}()
-
-					w.log.Logf("debug", "worker: instance=%d, job=%d, started", instance, i)
-					ctx, cancel := context.WithTimeout(ctx, w.interval)
-					defer cancel()
-					job(ctx)
-					w.log.Logf("debug", "worker: instance=%d, job=%d, finished", instance, i)
+					w.log.Logf("debug", "%s.worker: instance=%d, job=%d, finished", w.name, instance, i)
 				}(i, job)
 			}
 
@@ -106,42 +106,32 @@ func (w *Worker) start(ctx context.Context, instance int) {
 		}
 	}()
 
-	w.log.Logf("info", "worker: instance=%d, started", instance)
+	w.log.Logf("info", "%s.worker: instance=%d, started", w.name, instance)
 	<-ctx.Done()
-	w.log.Logf("info", "worker: instance=%d, stopped", instance)
+	w.log.Logf("info", "%s.worker: instance=%d, stopped", w.name, instance)
 }
 
 // NewWorker creates a new worker instance.
-func NewWorker(jobs ...Job) *Worker {
+func NewWorker(name string, jobs ...func()) *Worker {
 	w := Worker{
 		instances: DefaultInstances,
 		interval:  DefaultWorkerInterval,
 		jobs:      jobs,
 		stop:      make(chan struct{}, 1),
+		name:      name,
 	}
-
 	return &w
 }
 
 // NewQWorker creates a new worker instance with quiet mode enabled.
-func NewQWorker(jobs ...Job) *Worker {
-	w := NewWorker(jobs...)
+func NewQWorker(name string, jobs ...func()) *Worker {
+	w := NewWorker(name, jobs...)
 	w.log.quiet = true
 	return w
 }
 
-// Job is a task to be executed.
-type Job func(ctx context.Context)
-
 // Log instance with quiet support
 type Log struct{ quiet bool }
-
-// Log value
-func (l Log) Log(level string, v ...interface{}) {
-	if !l.quiet {
-		tea.Log(context.Background(), level, v...)
-	}
-}
 
 // Logf formatted value
 func (l Log) Logf(level, format string, args ...interface{}) {
