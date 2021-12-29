@@ -181,7 +181,7 @@ func New(redisURL string) *Red {
 	}
 
 	if err == nil {
-		err = q.queue.StartConsuming(11, 100*time.Millisecond)
+		err = q.queue.StartConsuming(11, time.Millisecond)
 	}
 
 	if err == nil {

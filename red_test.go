@@ -126,6 +126,28 @@ func TestRed(t *testing.T) {
 		assert.Nil(t, err)
 	})
 
+	t.Run("can enqueue", func(t *testing.T) {
+		err := queue.Enqueue(context.TODO(), "ok:test", "value")
+		assert.Nil(t, err)
+	})
+
+	t.Run("can dequeue", func(t *testing.T) {
+		<-time.After(100 * time.Millisecond)
+		m, err := queue.Dequeue(context.TODO())
+		assert.Nil(t, err)
+		assert.NotNil(t, m)
+		assert.Equal(t, "ok:test", m.Id)
+	})
+
+	t.Run("can schedule", func(t *testing.T) {
+		queue.StartScheduling(func(task *Task) {}, func() {})
+		defer queue.StopScheduling()
+		queue.Wait()
+		queue.Once("test")
+		assert.NotNil(t, queue.Repeat("test", "DAILY"))
+		assert.Nil(t, queue.Repeat("test", "FREQ=DAILY;COUNT=1"))
+	})
+
 	t.Run("enqueue raises busy lock errors", func(t *testing.T) {
 		_ = queue.Enqueue(context.TODO(), "busy:test", "value")
 		err := queue.Enqueue(context.TODO(), "busy:test", "value")
@@ -137,11 +159,6 @@ func TestRed(t *testing.T) {
 		err := queue.Enqueue(context.TODO(), "test", func() {})
 		assert.NotNil(t, err)
 		assert.False(t, tea.IsFatal(err))
-	})
-
-	t.Run("can enqueue", func(t *testing.T) {
-		err := queue.Enqueue(context.TODO(), "ok:test", "value")
-		assert.Nil(t, err)
 	})
 
 	t.Run("dequeue raises ctx errors", func(t *testing.T) {
@@ -169,22 +186,6 @@ func TestRed(t *testing.T) {
 		defer cancel()
 		_, err := queue.Dequeue(ctx)
 		assert.NotNil(t, err)
-	})
-
-	t.Run("can dequeue", func(t *testing.T) {
-		m, err := queue.Dequeue(context.TODO())
-		assert.Nil(t, err)
-		assert.NotNil(t, m)
-		assert.Equal(t, "ok:test", m.Id)
-	})
-
-	t.Run("can schedule", func(t *testing.T) {
-		queue.StartScheduling(func(task *Task) {}, func() {})
-		defer queue.StopScheduling()
-		queue.Wait()
-		queue.Once("test")
-		assert.NotNil(t, queue.Repeat("test", "DAILY"))
-		assert.Nil(t, queue.Repeat("test", "FREQ=DAILY;COUNT=1"))
 	})
 }
 
