@@ -7,7 +7,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.17.0
 	github.com/go-redis/redis/v8 v8.11.3
 	github.com/go-redsync/redsync/v4 v4.4.1
-	github.com/pghq/go-tea v0.0.41
+	github.com/pghq/go-tea v0.0.42
 	github.com/stretchr/testify v1.7.0
 	github.com/teambition/rrule-go v1.7.2
 )

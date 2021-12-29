@@ -123,8 +123,8 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 
 // Handle tasks when scheduled
 func (s *Scheduler) Handle(fn func(task *Task)) {
-	h := func(ctx context.Context) {
-		tea.Logf(ctx, "debug", "scheduler.worker.job: started")
+	h := func() {
+		tea.Logf(context.Background(), "debug", "scheduler.worker.handle: started")
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), s.dequeueTimeout)
 			msg, err := s.queue.Dequeue(ctx)
@@ -134,7 +134,7 @@ func (s *Scheduler) Handle(fn func(task *Task)) {
 			}
 
 			go func() {
-				tea.Logf(ctx, "info", "scheduler.worker.job: item=%s", msg.Id)
+				tea.Logf(ctx, "info", "scheduler.worker.handle: item=%s", msg.Id)
 				defer func() {
 					if err := msg.Ack(ctx); err != nil {
 						tea.Log(ctx, "error", err)
@@ -144,11 +144,11 @@ func (s *Scheduler) Handle(fn func(task *Task)) {
 				var task Task
 				if err := msg.Decode(&task); err == nil {
 					fn(&task)
-					tea.Logf(ctx, "info", "scheduler.worker.job: task=%s handled", task.Id)
+					tea.Logf(ctx, "info", "scheduler.worker.handle: task=%s handled", task.Id)
 				}
 			}()
 		}
-		tea.Logf(ctx, "debug", "scheduler.worker.job: finished")
+		tea.Logf(context.Background(), "debug", "scheduler.worker.handle: finished")
 	}
 
 	s.worker.AddJobs(h)
@@ -252,7 +252,7 @@ func (s *Scheduler) lock(ctx context.Context) (*redsync.Mutex, error) {
 // NewScheduler creates a scheduler instance.
 func NewScheduler(queue *Red) *Scheduler {
 	s := Scheduler{
-		worker:         NewWorker(),
+		worker:         NewWorker("scheduler"),
 		queue:          queue,
 		interval:       DefaultSchedulerInterval,
 		enqueueTimeout: DefaultEnqueueTimeout,

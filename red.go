@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version of the queue
-	Version = "0.0.22"
+	Version = "0.0.23"
 
 	// Prefix is the name prefix of the queue
 	Prefix = "go-red/v" + Version
@@ -54,9 +54,9 @@ func (r Red) Repeat(key, recurrence string) error {
 }
 
 // StartScheduling tasks
-func (r Red) StartScheduling(fn func(task *Task), jobs ...Job) {
-	r.scheduler.Handle(fn)
-	r.worker.AddJobs(jobs...)
+func (r Red) StartScheduling(handler func(task *Task), schedulers ...func()) {
+	r.scheduler.Handle(handler)
+	r.worker.AddJobs(schedulers...)
 	go r.scheduler.Start()
 	go r.worker.Start()
 }
@@ -178,7 +178,7 @@ func New(redisURL string) *Red {
 	}
 
 	q.scheduler = NewScheduler(&q)
-	q.worker = NewWorker()
+	q.worker = NewWorker("red")
 	return &q
 }
 
