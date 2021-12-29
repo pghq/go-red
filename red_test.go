@@ -179,8 +179,9 @@ func TestRed(t *testing.T) {
 	})
 
 	t.Run("can schedule", func(t *testing.T) {
-		queue.StartScheduling(func(task *Task) {})
+		queue.StartScheduling(func(task *Task) {}, func() {})
 		defer queue.StopScheduling()
+		queue.Wait()
 		queue.Once("test")
 		assert.NotNil(t, queue.Repeat("test", "DAILY"))
 		assert.Nil(t, queue.Repeat("test", "FREQ=DAILY;COUNT=1"))
