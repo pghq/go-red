@@ -92,9 +92,7 @@ func (w *Worker) start(ctx context.Context, instance int) {
 					w.log.Logf("debug", "%s.worker: instance=%d, job=%d, started", w.name, instance, i)
 					go func() {
 						defer func() {
-							if err := recover(); err != nil {
-								tea.Log(ctx, "error", err)
-							}
+							tea.Log(context.Background(), "error", recover())
 						}()
 						job()
 					}()

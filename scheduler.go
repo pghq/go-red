@@ -123,6 +123,10 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 
 // Handle tasks when scheduled
 func (s *Scheduler) Handle(fn func(task *Task)) {
+	defer func() {
+		tea.Log(context.Background(), "error", recover())
+	}()
+
 	h := func() {
 		tea.Logf(context.Background(), "debug", "scheduler.worker.handle: started")
 		for {
