@@ -9,7 +9,7 @@ import (
 // Dequeue message from the queue
 func (r *Red) Dequeue(ctx context.Context) (*Message, error) {
 	if err := r.Error(); err != nil {
-		return nil, tea.Stack(err)
+		return nil, tea.Stacktrace(err)
 	}
 
 	for {

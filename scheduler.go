@@ -248,7 +248,7 @@ func (s *Scheduler) lock(ctx context.Context) (*redsync.Mutex, error) {
 	defer cancel()
 	w := s.queue.Lock("scheduler", redsync.WithExpiry(s.interval+time.Second), redsync.WithTries(13))
 	if err := w.LockContext(ctx); err != nil {
-		return nil, tea.Stack(err)
+		return nil, tea.Stacktrace(err)
 	}
 	return w, nil
 }
