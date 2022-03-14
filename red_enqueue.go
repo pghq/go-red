@@ -12,7 +12,7 @@ import (
 // Enqueue message into queue
 func (r *Red) Enqueue(ctx context.Context, key, value interface{}) error {
 	if err := r.Error(); err != nil {
-		return tea.Stack(err)
+		return tea.Stacktrace(err)
 	}
 
 	id := fmt.Sprintf("%s", key)
@@ -21,7 +21,7 @@ func (r *Red) Enqueue(ctx context.Context, key, value interface{}) error {
 		if tea.IsError(err, redsync.ErrFailed) {
 			err = tea.AsErrBadRequest(err)
 		}
-		return tea.Stack(err)
+		return tea.Stacktrace(err)
 	}
 
 	err := func() error {
@@ -36,7 +36,7 @@ func (r *Red) Enqueue(ctx context.Context, key, value interface{}) error {
 
 	if err != nil {
 		_, _ = mutex.UnlockContext(ctx)
-		return tea.Stack(err)
+		return tea.Stacktrace(err)
 	}
 
 	return nil

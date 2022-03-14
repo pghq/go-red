@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version of the queue
-	Version = "0.0.27"
+	Version = "0.0.28"
 
 	// Prefix is the name prefix of the queue
 	Prefix = "go-red/v" + Version
@@ -48,7 +48,7 @@ func (r Red) Once(key string) {
 func (r Red) Repeat(key, recurrence string) error {
 	task := NewTask(key)
 	if err := task.SetRecurrence(recurrence); err != nil {
-		return tea.Stack(err)
+		return tea.Stacktrace(err)
 	}
 	r.scheduler.Add(task)
 	return nil
@@ -136,7 +136,7 @@ func (r Red) sendError(err error) {
 func (r Red) consume(delivery rmq.Delivery) {
 	var msg Message
 	if err := json.Unmarshal([]byte(delivery.Payload()), &msg); err != nil {
-		r.sendError(tea.Stack(err))
+		r.sendError(tea.Stacktrace(err))
 		return
 	}
 
@@ -191,7 +191,7 @@ func New(redisURL string) *Red {
 	}
 
 	if err != nil {
-		q.errors <- tea.Stack(err)
+		q.errors <- tea.Stacktrace(err)
 	}
 
 	q.scheduler = NewScheduler(&q)
