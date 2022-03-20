@@ -175,8 +175,8 @@ github.com/onsi/gomega v1.10.3/go.mod h1:V9xEwhxec5O8UDM77eCW8vLymOMltsqPVYWrpDs
 github.com/onsi/gomega v1.15.0 h1:WjP/FQ/sk43MRmnEcT+MlDw2TFvkrXlprrPST/IudjU=
 github.com/onsi/gomega v1.15.0/go.mod h1:cIuvLEne0aoVhAgh/O6ac0Op8WWw9H6eYCriF+tEHG0=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
-github.com/pghq/go-tea v0.0.56 h1:Ln4PEQ0fpyallYkn7fa1L0WlauzbQ7d3Jx92VLjwJJI=
-github.com/pghq/go-tea v0.0.56/go.mod h1:hqSAya2pv3llFYcvMCt0Pv1P3DYMaO45Ab/pmfElCpE=
+github.com/pghq/go-tea v0.0.57 h1:AI5Iy19itcf+gqCqvLmlhHrf2IFlMiC+v+5sg5F2t3k=
+github.com/pghq/go-tea v0.0.57/go.mod h1:hqSAya2pv3llFYcvMCt0Pv1P3DYMaO45Ab/pmfElCpE=
 github.com/pingcap/errors v0.11.4 h1:lFuQV/oaUMGcD2tqt+01ROSmJs75VG1ToEOkZIZ4nE4=
 github.com/pingcap/errors v0.11.4/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
