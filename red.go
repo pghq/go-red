@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version of the queue
-	Version = "0.0.29"
+	Version = "0.0.30"
 
 	// Prefix is the name prefix of the queue
 	Prefix = "go-red/v" + Version
