@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version of the queue
-	Version = "0.0.32"
+	Version = "0.0.33"
 
 	// Prefix is the name prefix of the queue
 	Prefix = "go-red/v" + Version
@@ -30,6 +30,7 @@ const (
 type Red struct {
 	Name      string
 	URL       *url.URL
+	ReadOnly bool
 	queue     rmq.Queue
 	sync      *redsync.Redsync
 	messages  chan *Message
@@ -41,16 +42,20 @@ type Red struct {
 
 // Once schedules a task to be done once
 func (r Red) Once(key string) {
-	r.scheduler.Add(NewTask(key))
+	if !r.ReadOnly{
+		r.scheduler.Add(NewTask(key))
+	}
 }
 
 // Repeat schedules a task to be done at least once
 func (r Red) Repeat(key, recurrence string) error {
-	task := NewTask(key)
-	if err := task.SetRecurrence(recurrence); err != nil {
-		return tea.Stacktrace(err)
+	if !r.ReadOnly{
+		task := NewTask(key)
+		if err := task.SetRecurrence(recurrence); err != nil {
+			return tea.Stacktrace(err)
+		}
+		r.scheduler.Add(task)
 	}
-	r.scheduler.Add(task)
 	return nil
 }
 
@@ -61,25 +66,31 @@ func (r Red) Wait() {
 
 // StartScheduling tasks
 func (r Red) StartScheduling(handler func(task *Task), schedulers ...func()) {
-	r.scheduler.Handle(func(task *Task) {
-		handler(task)
-		for {
-			select {
-			case <-r.waits:
-			default:
-				return
+	if !r.ReadOnly{
+		r.scheduler.Handle(func(task *Task) {
+			handler(task)
+			for {
+				select {
+				case <-r.waits:
+				default:
+					return
+				}
 			}
-		}
-	})
+		})
+
+		go r.scheduler.Start()
+	}
 
 	r.worker.AddJobs(schedulers...)
-	go r.scheduler.Start()
 	go r.worker.Start()
 }
 
 // StopScheduling tasks
 func (r Red) StopScheduling() {
-	r.scheduler.Stop()
+	if !r.ReadOnly{
+		r.scheduler.Stop()
+	}
+
 	r.worker.Stop()
 }
 
@@ -159,8 +170,10 @@ func New(redisURL string) *Red {
 	q.URL, _ = url.Parse(redisURL)
 	if q.URL != nil {
 		query := q.URL.Query()
-		q.Name = strings.Join([]string{q.Name, query.Get("queue")}, "/")
+		q.Name = strings.ToLower(strings.Join([]string{q.Name, query.Get("queue")}, "/"))
 		query.Del("queue")
+		q.ReadOnly = query.Get("readOnly") == "true"
+		query.Del("readOnly")
 		q.URL.RawQuery = query.Encode()
 		redisURL = q.URL.String()
 	}
@@ -194,7 +207,10 @@ func New(redisURL string) *Red {
 		q.errors <- tea.Stacktrace(err)
 	}
 
-	q.scheduler = NewScheduler(&q)
+	if !q.ReadOnly{
+		q.scheduler = NewScheduler(&q)
+	}
+
 	q.worker = NewWorker("red").Every(100 * time.Millisecond)
 	return &q
 }
