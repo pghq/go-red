@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version of the queue
-	Version = "0.0.33"
+	Version = "0.0.34"
 
 	// Prefix is the name prefix of the queue
 	Prefix = "go-red/v" + Version
@@ -56,6 +56,7 @@ func (r Red) Repeat(key, recurrence string) error {
 		}
 		r.scheduler.Add(task)
 	}
+
 	return nil
 }
 
@@ -66,32 +67,31 @@ func (r Red) Wait() {
 
 // StartScheduling tasks
 func (r Red) StartScheduling(handler func(task *Task), schedulers ...func()) {
-	if !r.ReadOnly{
-		r.scheduler.Handle(func(task *Task) {
-			handler(task)
-			for {
-				select {
-				case <-r.waits:
-				default:
-					return
-				}
+	r.scheduler.Handle(func(task *Task) {
+		handler(task)
+		for {
+			select {
+			case <-r.waits:
+			default:
+				return
 			}
-		})
+		}
+	})
 
-		go r.scheduler.Start()
+	go r.scheduler.Start()
+	if !r.ReadOnly{
+		r.worker.AddJobs(schedulers...)
+		go r.worker.Start()
 	}
-
-	r.worker.AddJobs(schedulers...)
-	go r.worker.Start()
 }
 
 // StopScheduling tasks
 func (r Red) StopScheduling() {
 	if !r.ReadOnly{
-		r.scheduler.Stop()
+		r.worker.Stop()
 	}
 
-	r.worker.Stop()
+	r.scheduler.Stop()
 }
 
 // Error checks if any errors have occurred
