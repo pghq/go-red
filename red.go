@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version of the queue
-	Version = "0.0.35"
+	Version = "0.0.36"
 
 	// Prefix is the name prefix of the queue
 	Prefix = "go-red/v" + Version
@@ -30,7 +30,6 @@ const (
 type Red struct {
 	Name      string
 	URL       *url.URL
-	ReadOnly bool
 	queue     rmq.Queue
 	sync      *redsync.Redsync
 	messages  chan *Message
@@ -42,20 +41,16 @@ type Red struct {
 
 // Once schedules a task to be done once
 func (r Red) Once(key string) {
-	if !r.ReadOnly{
-		r.scheduler.Add(NewTask(key))
-	}
+	r.scheduler.Add(r.scheduler.NewTask(key))
 }
 
 // Repeat schedules a task to be done at least once
 func (r Red) Repeat(key, recurrence string) error {
-	if !r.ReadOnly{
-		task := NewTask(key)
-		if err := task.SetRecurrence(recurrence); err != nil {
-			return tea.Stacktrace(err)
-		}
-		r.scheduler.Add(task)
+	task := r.scheduler.NewTask(key)
+	if err := task.SetRecurrence(recurrence); err != nil {
+		return tea.Stacktrace(err)
 	}
+	r.scheduler.Add(task)
 
 	return nil
 }
@@ -78,19 +73,14 @@ func (r Red) StartScheduling(handler func(task *Task), schedulers ...func()) {
 		}
 	})
 
+	r.worker.AddJobs(schedulers...)
+	go r.worker.Start()
 	go r.scheduler.Start()
-	if !r.ReadOnly{
-		r.worker.AddJobs(schedulers...)
-		go r.worker.Start()
-	}
 }
 
 // StopScheduling tasks
 func (r Red) StopScheduling() {
-	if !r.ReadOnly{
-		r.worker.Stop()
-	}
-
+	r.worker.Stop()
 	r.scheduler.Stop()
 }
 
@@ -172,8 +162,6 @@ func New(redisURL string) *Red {
 		query := q.URL.Query()
 		q.Name = strings.ToLower(strings.Join([]string{q.Name, query.Get("queue")}, "/"))
 		query.Del("queue")
-		q.ReadOnly = query.Get("readOnly") == "true"
-		query.Del("readOnly")
 		q.URL.RawQuery = query.Encode()
 		redisURL = q.URL.String()
 	}
@@ -207,10 +195,7 @@ func New(redisURL string) *Red {
 		q.errors <- tea.Stacktrace(err)
 	}
 
-	if !q.ReadOnly{
-		q.worker = NewWorker("red").Every(100 * time.Millisecond)
-	}
-
+	q.worker = NewWorker("red").Every(100 * time.Millisecond)
 	q.scheduler = NewScheduler(&q)
 	return &q
 }

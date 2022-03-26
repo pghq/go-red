@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redsync/redsync/v4"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,15 +64,17 @@ func TestScheduler_Add(t *testing.T) {
 
 	queue := New(fmt.Sprintf("%s?queue=scheduler", queue.URL.String()))
 	t.Run("raises missing id errors", func(t *testing.T) {
-		task := NewTask("")
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue)
+		task := s.NewTask("")
+		s.Add(task)
 		assert.NotNil(t, s)
 		assert.Empty(t, s.tasks)
 	})
 
 	t.Run("can enqueue", func(t *testing.T) {
-		task := NewTask("test")
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
+		s.Add(task)
 		assert.NotNil(t, s)
 		assert.NotEmpty(t, s.tasks)
 		assert.Len(t, s.tasks, 1)
@@ -81,8 +82,9 @@ func TestScheduler_Add(t *testing.T) {
 	})
 
 	t.Run("does not add duplicates", func(t *testing.T) {
-		task := NewTask("test")
-		s := NewScheduler(queue).Add(task).Add(task)
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
+		s.Add(task).Add(task)
 		assert.NotNil(t, s)
 		assert.NotEmpty(t, s.tasks)
 		assert.Len(t, s.tasks, 1)
@@ -93,24 +95,14 @@ func TestScheduler_Add(t *testing.T) {
 func TestScheduler_Start(t *testing.T) {
 	t.Parallel()
 
-	t.Run("failed to obtain exclusivity", func(t *testing.T) {
-		queue := New(fmt.Sprintf("%s?queue=timeout", queue.URL.String()))
-		mx := queue.Lock("scheduler", redsync.WithTries(3))
-		mx.Lock()
-		defer mx.Unlock()
-		sched := NewScheduler(queue)
-		sched.syncTimeout = 0
-		go sched.EnqueueTimeout(0).Start()
-		<-time.After(time.Millisecond)
-	})
-
 	t.Run("raises enqueue errors", func(t *testing.T) {
 		queue := New(fmt.Sprintf("%s?queue=enqueue:error", queue.URL.String()))
 		mx := queue.Lock("enqueue:test")
 		mx.Lock()
 		defer mx.Unlock()
-		task := NewTask("enqueue:test")
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue)
+		task := s.NewTask("enqueue:test")
+		s.Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
@@ -118,10 +110,11 @@ func TestScheduler_Start(t *testing.T) {
 
 	t.Run("ignores tasks not ready yet", func(t *testing.T) {
 		queue := New(fmt.Sprintf("%s?queue=ignore", queue.URL.String()))
-		task := NewTask("ignore:test")
+		s := NewScheduler(queue)
+		task := s.NewTask("ignore:test")
 		_ = task.SetRecurrence("DTSTART=99990101T000000Z;FREQ=DAILY")
 
-		s := NewScheduler(queue).Add(task)
+		s.Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
@@ -131,8 +124,9 @@ func TestScheduler_Start(t *testing.T) {
 
 	t.Run("schedules tasks that are ready", func(t *testing.T) {
 		queue := New(fmt.Sprintf("%s?queue=ready", queue.URL.String()))
-		task := NewTask("ready:test")
-		s := NewScheduler(queue).Add(task)
+		s := NewScheduler(queue)
+		task := s.NewTask("ready:test")
+		s.Add(task)
 		go s.Start()
 		<-time.After(100 * time.Millisecond)
 		s.Stop()
@@ -146,8 +140,9 @@ func TestScheduler_Worker(t *testing.T) {
 
 	t.Run("raises message errors", func(t *testing.T) {
 		queue := New(fmt.Sprintf("%s?queue=message:error", queue.URL.String()))
-		task := NewTask("error:test")
-		s := NewScheduler(queue).Add(task).Add(task)
+		s := NewScheduler(queue)
+		task := s.NewTask("error:test")
+		s.Add(task).Add(task)
 		s.Handle(func(task *Task) {})
 		defer s.Stop()
 		go s.Start()
@@ -157,8 +152,9 @@ func TestScheduler_Worker(t *testing.T) {
 
 	t.Run("can process tasks", func(t *testing.T) {
 		queue := New(fmt.Sprintf("%s?queue=proccess", queue.URL.String()))
-		task := NewTask("process:test")
-		s := NewScheduler(queue).Add(task).Add(task)
+		s := NewScheduler(queue)
+		task := s.NewTask("process:test")
+		s.Add(task).Add(task)
 		s.Handle(func(task *Task) {})
 		defer s.Stop()
 		go s.Start()
@@ -170,21 +166,24 @@ func TestTask_CanSchedule(t *testing.T) {
 	t.Parallel()
 
 	t.Run("tasks not after do not schedule", func(t *testing.T) {
-		task := NewTask("test")
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
 		_ = task.SetRecurrence("UNTIL=19700101T000000Z;FREQ=DAILY")
 		canSchedule := task.CanSchedule(time.Now())
 		assert.False(t, canSchedule)
 	})
 
 	t.Run("tasks with bad recurrence do not schedule", func(t *testing.T) {
-		task := NewTask("test")
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
 		task.Schedule.Recurrence = "DAILY"
 		canSchedule := task.CanSchedule(time.Now())
 		assert.False(t, canSchedule)
 	})
 
 	t.Run("tasks that have already reached limit do not schedule", func(t *testing.T) {
-		task := NewTask("test")
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
 		_ = task.SetRecurrence("DTSTART=99990101T000000Z;FREQ=DAILY;COUNT=1")
 		task.Schedule.Count = 1
 		canSchedule := task.CanSchedule(time.Now())
@@ -192,7 +191,8 @@ func TestTask_CanSchedule(t *testing.T) {
 	})
 
 	t.Run("schedules tasks", func(t *testing.T) {
-		task := NewTask("test")
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
 		_ = task.SetRecurrence("FREQ=DAILY;COUNT=1")
 		canSchedule := task.CanSchedule(time.Now())
 		assert.True(t, canSchedule)
@@ -205,14 +205,16 @@ func TestTask_IsComplete(t *testing.T) {
 	t.Parallel()
 
 	t.Run("tasks that have ended are complete", func(t *testing.T) {
-		task := NewTask("test")
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
 		_ = task.SetRecurrence("UNTIL=19700101T000000Z;FREQ=DAILY")
 		isComplete := task.IsComplete()
 		assert.True(t, isComplete)
 	})
 
 	t.Run("tasks that have reached limit are complete", func(t *testing.T) {
-		task := NewTask("test")
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
 		_ = task.SetRecurrence("DTSTART=99990101T000000Z;FREQ=DAILY;COUNT=1")
 		task.Schedule.Count = 1
 		isComplete := task.IsComplete()
@@ -220,7 +222,8 @@ func TestTask_IsComplete(t *testing.T) {
 	})
 
 	t.Run("tasks with bad recurrence are complete", func(t *testing.T) {
-		task := NewTask("test")
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
 		task.Schedule.Recurrence = "DAILY"
 		isComplete := task.IsComplete()
 		assert.True(t, isComplete)
@@ -231,7 +234,8 @@ func TestTask_SetRecurrence(t *testing.T) {
 	t.Parallel()
 
 	t.Run("does not set task with bad recurrence", func(t *testing.T) {
-		task := NewTask("test")
+		s := NewScheduler(queue)
+		task := s.NewTask("test")
 		err := task.SetRecurrence("DAILY")
 		assert.NotNil(t, err)
 		assert.Empty(t, task.Schedule.Recurrence)

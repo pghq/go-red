@@ -2,6 +2,7 @@ package red
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -27,8 +28,6 @@ type Scheduler struct {
 	interval       time.Duration
 	stop           chan struct{}
 	queue          *Red
-	sync           *redsync.Mutex
-	syncTimeout    time.Duration
 	enqueueTimeout time.Duration
 	dequeueTimeout time.Duration
 	rwlock         sync.RWMutex
@@ -61,15 +60,6 @@ func (s *Scheduler) DequeueTimeout(timeout time.Duration) *Scheduler {
 // Start begins scheduling tasks.
 func (s *Scheduler) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
-	w, err := s.lock(ctx)
-	if err != nil {
-		tea.Log(ctx, "error", err)
-		cancel()
-		return
-	}
-
-	s.sync = w
-	defer s.sync.UnlockContext(ctx)
 
 	s.wg.Add(1)
 	go s.start(ctx)
@@ -163,16 +153,6 @@ func (s *Scheduler) start(ctx context.Context) {
 	defer s.wg.Done()
 	go func() {
 		for {
-			if _, err := s.sync.ExtendContext(ctx); err != nil {
-				s.Stop()
-				tea.Log(ctx, "error", err)
-				return
-			}
-		}
-	}()
-
-	go func() {
-		for {
 			select {
 			case <-ctx.Done():
 				tea.Log(ctx, "info", "scheduler: background task #2 stopped")
@@ -183,21 +163,18 @@ func (s *Scheduler) start(ctx context.Context) {
 			now := time.Now()
 			s.rwlock.RLock()
 			for _, task := range s.tasks {
-				if !task.Lock() {
-					continue
-				}
-
-				if !task.CanSchedule(now) {
-					task.Unlock()
-					continue
-				}
-
 				go func(task *Task) {
-					defer func() {
-						task.Unlock()
-					}()
 					ctx, cancel := context.WithTimeout(ctx, s.enqueueTimeout)
 					defer cancel()
+
+					if err := task.LockContext(ctx); err != nil {
+						return
+					}
+
+					defer task.UnlockContext(ctx)
+					if !task.CanSchedule(now) {
+						return
+					}
 
 					if err := s.queue.Enqueue(ctx, task.Id, task); err != nil {
 						tea.Log(ctx, "error", err)
@@ -242,17 +219,6 @@ func (s *Scheduler) start(ctx context.Context) {
 	<-ctx.Done()
 }
 
-// lock the scheduler for exclusive rights
-func (s *Scheduler) lock(ctx context.Context) (*redsync.Mutex, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.syncTimeout)
-	defer cancel()
-	w := s.queue.Lock("scheduler", redsync.WithExpiry(s.interval+time.Second), redsync.WithTries(13))
-	if err := w.LockContext(ctx); err != nil {
-		return nil, tea.Stacktrace(err)
-	}
-	return w, nil
-}
-
 // NewScheduler creates a scheduler instance.
 func NewScheduler(queue *Red) *Scheduler {
 	s := Scheduler{
@@ -261,7 +227,6 @@ func NewScheduler(queue *Red) *Scheduler {
 		interval:       DefaultSchedulerInterval,
 		enqueueTimeout: DefaultEnqueueTimeout,
 		dequeueTimeout: DefaultDequeueTimeout,
-		syncTimeout:    5 * time.Minute,
 		tasks:          make(map[string]*Task),
 		completed:      make(chan *Task),
 		stop:           make(chan struct{}, 1),
@@ -274,25 +239,7 @@ func NewScheduler(queue *Red) *Scheduler {
 type Task struct {
 	Id       string       `json:"id"`
 	Schedule TaskSchedule `json:"schedule"`
-	lock     chan struct{}
-}
-
-// Lock notifies the scheduler to ignore scheduling.
-func (t *Task) Lock() bool {
-	select {
-	case <-t.lock:
-		return true
-	default:
-		return false
-	}
-}
-
-// Unlock notifies the scheduler that the task has been scheduled.
-func (t *Task) Unlock() {
-	select {
-	case t.lock <- struct{}{}:
-	default:
-	}
+	*redsync.Mutex
 }
 
 // Occurrences gets the number of times the task has been scheduled.
@@ -381,13 +328,11 @@ func (t *Task) SetRecurrence(rfc string) error {
 }
 
 // NewTask creates a new instance of a task to be scheduled.
-func NewTask(id string) *Task {
+func (s *Scheduler) NewTask(id string) *Task {
 	t := Task{
-		Id:   id,
-		lock: make(chan struct{}, 1),
+		Id:    id,
+		Mutex: s.queue.Lock(fmt.Sprintf("task:%s", id)),
 	}
-
-	t.Unlock()
 	return &t
 }
 
