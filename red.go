@@ -12,16 +12,10 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
-	"github.com/pghq/go-tea"
+	"github.com/pghq/go-tea/trail"
 )
 
 const (
-	// Version of the queue
-	Version = "0.0.36"
-
-	// Prefix is the name prefix of the queue
-	Prefix = "go-red/v" + Version
-
 	// BatchSize the total number of errors and messages consumed before dropping occurs
 	BatchSize = 1024
 )
@@ -48,7 +42,7 @@ func (r Red) Once(key string) {
 func (r Red) Repeat(key, recurrence string) error {
 	task := r.scheduler.NewTask(key)
 	if err := task.SetRecurrence(recurrence); err != nil {
-		return tea.Stacktrace(err)
+		return trail.Stacktrace(err)
 	}
 	r.scheduler.Add(task)
 
@@ -111,7 +105,7 @@ func (r Red) send(msg *Message) {
 	select {
 	case r.messages <- msg:
 	default:
-		r.sendError(tea.Err("message dropped for: ", msg.Id))
+		r.sendError(trail.NewErrorf("message dropped for: %s", msg.Id))
 	}
 }
 
@@ -137,7 +131,7 @@ func (r Red) sendError(err error) {
 func (r Red) consume(delivery rmq.Delivery) {
 	var msg Message
 	if err := json.Unmarshal([]byte(delivery.Payload()), &msg); err != nil {
-		r.sendError(tea.Stacktrace(err))
+		r.sendError(trail.Stacktrace(err))
 		return
 	}
 
@@ -151,7 +145,7 @@ func (r Red) consume(delivery rmq.Delivery) {
 // New creates a named instance of the exclusive queue
 func New(redisURL string) *Red {
 	q := Red{
-		Name:     Prefix,
+		Name:     "go-red",
 		messages: make(chan *Message, BatchSize),
 		errors:   make(chan error, BatchSize),
 		waits:    make(chan struct{}),
@@ -192,7 +186,7 @@ func New(redisURL string) *Red {
 	}
 
 	if err != nil {
-		q.errors <- tea.Stacktrace(err)
+		q.errors <- trail.Stacktrace(err)
 	}
 
 	q.worker = NewWorker("red").Every(100 * time.Millisecond)

@@ -3,13 +3,18 @@ package red
 import (
 	"context"
 
-	"github.com/pghq/go-tea"
+	"github.com/pghq/go-tea/trail"
+)
+
+var (
+	// ErrNoMessages is an error returned when a request is made but no messages are available
+	ErrNoMessages = trail.NewErrorBadRequest("no messages currently available")
 )
 
 // Dequeue message from the queue
 func (r *Red) Dequeue(ctx context.Context) (*Message, error) {
 	if err := r.Error(); err != nil {
-		return nil, tea.Stacktrace(err)
+		return nil, trail.Stacktrace(err)
 	}
 
 	for {
@@ -19,7 +24,7 @@ func (r *Red) Dequeue(ctx context.Context) (*Message, error) {
 		default:
 			m := r.message()
 			if m == nil {
-				return nil, tea.ErrBadRequest("no messages")
+				return nil, ErrNoMessages
 			}
 			mutex := r.RLock(m.Id)
 			if err := mutex.LockContext(ctx); err != nil {
