@@ -9,14 +9,14 @@ import (
 
 	"github.com/adjust/rmq/v4"
 	"github.com/alicebob/miniredis/v2"
-	"github.com/pghq/go-tea"
+	"github.com/pghq/go-tea/trail"
 	"github.com/stretchr/testify/assert"
 )
 
 var queue *Red
 
 func TestMain(m *testing.M) {
-	tea.Testing()
+	trail.Testing()
 	s, _ := miniredis.Run()
 	defer s.Close()
 	queue = New(fmt.Sprintf("redis://%s?queue=test", s.Addr()))
@@ -54,7 +54,7 @@ func TestRed(t *testing.T) {
 	})
 
 	t.Run("can send errors", func(t *testing.T) {
-		err := tea.Err("an error has occurred")
+		err := trail.NewError("an error has occurred")
 		for i := 0; i <= 1024; i++ {
 			queue.sendError(err)
 		}
@@ -86,7 +86,7 @@ func TestRed(t *testing.T) {
 
 	t.Run("message raises ack errors", func(t *testing.T) {
 		msg := Message{
-			ack: func() error { return tea.Err("an error has occurred") },
+			ack: func() error { return trail.NewError("an error has occurred") },
 		}
 
 		err := msg.Ack(context.TODO())
@@ -107,7 +107,7 @@ func TestRed(t *testing.T) {
 
 	t.Run("message raises reject errors", func(t *testing.T) {
 		msg := Message{
-			reject: func() error { return tea.Err("an error has occurred") },
+			reject: func() error { return trail.NewError("an error has occurred") },
 		}
 
 		err := msg.Reject(context.TODO())
@@ -152,13 +152,13 @@ func TestRed(t *testing.T) {
 		_ = queue.Enqueue(context.TODO(), "busy:test", "value")
 		err := queue.Enqueue(context.TODO(), "busy:test", "value")
 		assert.NotNil(t, err)
-		assert.False(t, tea.IsFatal(err))
+		assert.False(t, trail.IsFatal(err))
 	})
 
 	t.Run("enqueue raises bad value errors", func(t *testing.T) {
 		err := queue.Enqueue(context.TODO(), "bad:test", func() {})
 		assert.NotNil(t, err)
-		assert.False(t, tea.IsFatal(err))
+		assert.False(t, trail.IsFatal(err))
 	})
 
 	t.Run("dequeue raises ctx errors", func(t *testing.T) {
@@ -181,7 +181,7 @@ func TestRed(t *testing.T) {
 		mutex.Lock()
 		defer mutex.Unlock()
 
-		queue.send(&Message{Id: "dequeue:test", reject: func() error { return tea.Err("an error") }})
+		queue.send(&Message{Id: "dequeue:test", reject: func() error { return trail.NewError("an error") }})
 		ctx, cancel := context.WithTimeout(context.TODO(), time.Millisecond)
 		defer cancel()
 		_, err := queue.Dequeue(ctx)

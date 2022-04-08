@@ -6,28 +6,28 @@ import (
 	"fmt"
 
 	"github.com/go-redsync/redsync/v4"
-	"github.com/pghq/go-tea"
+	"github.com/pghq/go-tea/trail"
 )
 
 // Enqueue message into queue
 func (r *Red) Enqueue(ctx context.Context, key, value interface{}) error {
 	if err := r.Error(); err != nil {
-		return tea.Stacktrace(err)
+		return trail.Stacktrace(err)
 	}
 
 	id := fmt.Sprintf("%s", key)
 	mutex := r.Lock(id)
 	if err := mutex.LockContext(ctx); err != nil {
-		if tea.IsError(err, redsync.ErrFailed) {
-			err = tea.AsErrBadRequest(err)
+		if trail.IsError(err, redsync.ErrFailed) {
+			err = trail.ErrorBadRequest(err)
 		}
-		return tea.Stacktrace(err)
+		return trail.Stacktrace(err)
 	}
 
 	err := func() error {
 		v, err := json.Marshal(value)
 		if err != nil {
-			return tea.ErrBadRequest(err)
+			return trail.ErrorBadRequest(err)
 		}
 
 		payload, _ := json.Marshal(&Message{Id: id, Value: v})
@@ -36,7 +36,7 @@ func (r *Red) Enqueue(ctx context.Context, key, value interface{}) error {
 
 	if err != nil {
 		_, _ = mutex.UnlockContext(ctx)
-		return tea.Stacktrace(err)
+		return trail.Stacktrace(err)
 	}
 
 	return nil

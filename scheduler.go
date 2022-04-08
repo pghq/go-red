@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-redsync/redsync/v4"
-	"github.com/pghq/go-tea"
+	"github.com/pghq/go-tea/trail"
 	"github.com/teambition/rrule-go"
 )
 
@@ -65,7 +65,7 @@ func (s *Scheduler) Start() {
 	go s.start(ctx)
 	go s.worker.Start()
 
-	tea.Log(ctx, "info", "scheduler: started")
+	trail.Info("red.scheduler: started")
 	<-s.stop
 	cancel()
 
@@ -76,7 +76,7 @@ func (s *Scheduler) Start() {
 	}()
 
 	<-s.stop
-	tea.Log(ctx, "info", "scheduler: stopped")
+	trail.Info("red.scheduler: stopped")
 }
 
 // Stop stops the scheduler and waits for background jobs to finish.
@@ -98,14 +98,14 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 		_, present := s.tasks[task.Id]
 		s.rwlock.RUnlock()
 		if present {
-			tea.Logf(context.Background(), "debug", "scheduler: task=%s already in ledger", task.Id)
+			trail.Debugf("red.scheduler: task=%s already in ledger", task.Id)
 			continue
 		}
 
 		s.rwlock.Lock()
 		s.tasks[task.Id] = task
 		s.rwlock.Unlock()
-		tea.Logf(context.Background(), "info", "scheduler: task=%s added to ledger", task.Id)
+		trail.Infof("red.scheduler: task=%s added to ledger", task.Id)
 	}
 
 	return s
@@ -114,11 +114,11 @@ func (s *Scheduler) Add(tasks ...*Task) *Scheduler {
 // Handle tasks when scheduled
 func (s *Scheduler) Handle(fn func(task *Task)) {
 	defer func() {
-		tea.Log(context.Background(), "error", recover())
+		trail.Error(recover())
 	}()
 
 	h := func() {
-		tea.Logf(context.Background(), "debug", "scheduler.worker.handle: started")
+		trail.Debug("red.scheduler.worker: started handling")
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), s.dequeueTimeout)
 			msg, err := s.queue.Dequeue(ctx)
@@ -128,21 +128,21 @@ func (s *Scheduler) Handle(fn func(task *Task)) {
 			}
 
 			go func() {
-				tea.Logf(ctx, "info", "scheduler.worker.handle: item=%s", msg.Id)
+				trail.Infof("red.scheduler.worker: item=%s", msg.Id)
 				defer func() {
 					if err := msg.Ack(ctx); err != nil {
-						tea.Log(ctx, "error", err)
+						trail.Error(err)
 					}
 				}()
 
 				var task Task
 				if err := msg.Decode(&task); err == nil {
 					fn(&task)
-					tea.Logf(ctx, "info", "scheduler.worker.handle: task=%s handled", task.Id)
+					trail.Infof("red.scheduler.worker: task=%s handled", task.Id)
 				}
 			}()
 		}
-		tea.Logf(context.Background(), "debug", "scheduler.worker.handle: finished")
+		trail.Debug("scheduler.worker.handle: finished handling")
 	}
 
 	s.worker.AddJobs(h)
@@ -155,7 +155,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				tea.Log(ctx, "info", "scheduler: background task #2 stopped")
+				trail.Info("red.scheduler: background task #2 stopped")
 				return
 			case <-time.After(s.interval):
 			}
@@ -177,7 +177,7 @@ func (s *Scheduler) start(ctx context.Context) {
 					}
 
 					if err := s.queue.Enqueue(ctx, task.Id, task); err != nil {
-						tea.Log(ctx, "error", err)
+						trail.Error(err)
 						return
 					}
 
@@ -186,7 +186,7 @@ func (s *Scheduler) start(ctx context.Context) {
 						s.completed <- task
 					}
 
-					tea.Logf(ctx, "info", "scheduler: task=%s scheduled", task.Id)
+					trail.Infof("red.scheduler: task=%s scheduled", task.Id)
 				}(task)
 			}
 			s.rwlock.RUnlock()
@@ -197,7 +197,7 @@ func (s *Scheduler) start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				tea.Log(ctx, "info", "scheduler: background task #3 stopped")
+				trail.Info("red.scheduler: background task #3 stopped")
 				return
 			case <-time.After(s.interval):
 			}
@@ -208,7 +208,7 @@ func (s *Scheduler) start(ctx context.Context) {
 					s.rwlock.Lock()
 					delete(s.tasks, task.Id)
 					s.rwlock.Unlock()
-					tea.Logf(ctx, "info", "scheduler: task=%s removed from ledger", task.Id)
+					trail.Infof("red.scheduler: task=%s removed from ledger", task.Id)
 				default:
 					removing = false
 				}
@@ -319,7 +319,7 @@ func (t *Task) SetRecurrence(rfc string) error {
 	defer t.Schedule.Unlock()
 
 	if _, err := rrule.StrToRRule(rfc); err != nil {
-		return tea.AsErrBadRequest(err)
+		return trail.ErrorBadRequest(err)
 	}
 
 	t.Schedule.Recurrence = rfc

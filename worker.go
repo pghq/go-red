@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pghq/go-tea"
+	"github.com/pghq/go-tea/trail"
 )
 
 const (
@@ -40,7 +40,7 @@ func (w *Worker) Start() {
 		go w.start(ctx, i+1)
 	}
 
-	w.log.Logf("info", "%s.worker: workers=%d, started", w.name, w.instances)
+	w.log.Infof("%s.worker: workers=%d, started", w.name, w.instances)
 
 	<-w.stop
 	cancel()
@@ -49,7 +49,7 @@ func (w *Worker) Start() {
 		w.Stop()
 	}()
 	<-w.stop
-	w.log.Logf("info", "%s.worker: stopped", w.name)
+	w.log.Infof("%s.worker: stopped", w.name)
 }
 
 // Concurrent sets the number of simultaneous instances to process tasks.
@@ -89,14 +89,14 @@ func (w *Worker) start(ctx context.Context, instance int) {
 				wg.Add(1)
 				go func(i int, job func()) {
 					defer wg.Done()
-					w.log.Logf("debug", "%s.worker: instance=%d, job=%d, started", w.name, instance, i)
+					w.log.Debugf("%s.worker: instance=%d, job=%d, started", w.name, instance, i)
 					go func() {
 						defer func() {
-							tea.Log(context.Background(), "error", recover())
+							trail.Error(recover())
 						}()
 						job()
 					}()
-					w.log.Logf("debug", "%s.worker: instance=%d, job=%d, finished", w.name, instance, i)
+					w.log.Debugf("%s.worker: instance=%d, job=%d, finished", w.name, instance, i)
 				}(i, job)
 			}
 
@@ -104,9 +104,9 @@ func (w *Worker) start(ctx context.Context, instance int) {
 		}
 	}()
 
-	w.log.Logf("info", "%s.worker: instance=%d, started", w.name, instance)
+	w.log.Infof("%s.worker: instance=%d, started", w.name, instance)
 	<-ctx.Done()
-	w.log.Logf("info", "%s.worker: instance=%d, stopped", w.name, instance)
+	w.log.Infof("%s.worker: instance=%d, stopped", w.name, instance)
 }
 
 // NewWorker creates a new worker instance.
@@ -131,9 +131,16 @@ func NewQWorker(name string, jobs ...func()) *Worker {
 // Log instance with quiet support
 type Log struct{ quiet bool }
 
-// Logf formatted value
-func (l Log) Logf(level, format string, args ...interface{}) {
+// Debugf formatted value
+func (l Log) Debugf(format string, args ...interface{}) {
 	if !l.quiet {
-		tea.Logf(context.Background(), level, format, args...)
+		trail.Debugf(format, args...)
+	}
+}
+
+// Infof formatted value
+func (l Log) Infof(format string, args ...interface{}) {
+	if !l.quiet {
+		trail.Infof(format, args...)
 	}
 }
