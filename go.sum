@@ -84,8 +84,8 @@ github.com/onsi/gomega v1.10.2/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1y
 github.com/onsi/gomega v1.10.3/go.mod h1:V9xEwhxec5O8UDM77eCW8vLymOMltsqPVYWrpDsH8xc=
 github.com/onsi/gomega v1.15.0 h1:WjP/FQ/sk43MRmnEcT+MlDw2TFvkrXlprrPST/IudjU=
 github.com/onsi/gomega v1.15.0/go.mod h1:cIuvLEne0aoVhAgh/O6ac0Op8WWw9H6eYCriF+tEHG0=
-github.com/pghq/go-tea v0.1.16 h1:BS/oWhwEHbYaemptTzFv74FRRdqfo627RxDGgogpARg=
-github.com/pghq/go-tea v0.1.16/go.mod h1:JfkuN8838j5kKDeexN/t+aEkaJYlagJIrPkTUIErugA=
+github.com/pghq/go-tea v0.1.19 h1:5jp2glJYSpf+Fwt16yzPHrX6OkdRabatvDkgzCIYiQ8=
+github.com/pghq/go-tea v0.1.19/go.mod h1:JfkuN8838j5kKDeexN/t+aEkaJYlagJIrPkTUIErugA=
 github.com/pingcap/errors v0.11.4 h1:lFuQV/oaUMGcD2tqt+01ROSmJs75VG1ToEOkZIZ4nE4=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
